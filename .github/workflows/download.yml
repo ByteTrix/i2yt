@@ -25,12 +25,16 @@ jobs:
         run: pip install -U yt-dlp      
       - name: Write Cookies to File
         run: echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
-
-      - name: Get Instagram Media
-        run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.%(ext)s"
+      - name: Get Media Title
+        run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" --get-title > title.txt      
+      - name: Get Media
+        run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.mp4" --recode-video mp4
 
       - name: Upload Media as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-media
-          path: reel.*
+          name: media
+          path: |
+            reel.mp4
+            title.txt
+          retention-days: 1
