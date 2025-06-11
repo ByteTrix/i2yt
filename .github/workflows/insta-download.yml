@@ -1,0 +1,37 @@
+name: Insta Reel Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Instagram Reel URL'
+        required: true
+        type: string
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install yt-dlp
+        run: pip install -U yt-dlp
+
+      - name: Write Cookies to File
+        run: echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
+
+      - name: Download Instagram Reel
+        run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.%(ext)s"
+
+      - name: Upload Reel as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: instagram-reel
+          path: reel.*
