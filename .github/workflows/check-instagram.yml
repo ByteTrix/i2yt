@@ -1,0 +1,242 @@
+name: Instagram Reel Checker
+
+on:
+  schedule:
+    # Run daily at 8 PM IST (2:30 PM UTC)
+    - cron: '30 14 * * *'  # Daily at 8 PM IST
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force check both accounts'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PRIMARY_ACCOUNT: ${{ secrets.PRIMARY_INSTA_USERNAME }}
+  BACKUP_ACCOUNT: ${{ secrets.BACKUP_INSTA_USERNAME }}
+  AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+  AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+  AIRTABLE_TABLE_ID: ${{ secrets.AIRTABLE_TABLE_ID }}
+
+jobs:
+  check-accounts:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-insta-checker
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
+      - name: Install Dependencies
+        run: |
+          pip install -U yt-dlp requests python-dateutil
+          
+      - name: Write Instagram Cookies
+        run: |
+          echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
+          echo "${{ secrets.BACKUP_INSTA_COOKIES }}" > backup_cookies.txt
+          
+      - name: Create Instagram Checker Script
+        run: |
+          cat > check_instagram.py << 'EOF'
+          import json
+          import subprocess
+          import requests
+          import sys
+          from datetime import datetime, timedelta
+          import os
+          
+          def get_airtable_processed_urls():
+              """Get list of already processed Instagram URLs from Airtable"""
+              headers = {
+                  'Authorization': f'Bearer {os.environ["AIRTABLE_TOKEN"]}',
+                  'Content-Type': 'application/json'
+              }
+              
+              url = f'https://api.airtable.com/v0/{os.environ["AIRTABLE_BASE_ID"]}/{os.environ["AIRTABLE_TABLE_ID"]}'
+              
+              try:
+                  response = requests.get(url, headers=headers)
+                  response.raise_for_status()
+                  
+                  processed_urls = set()
+                  data = response.json()
+                  
+                  for record in data.get('records', []):
+                      fields = record.get('fields', {})
+                      if 'url' in fields:
+                          processed_urls.add(fields['url'])
+                  
+                  return processed_urls
+              except Exception as e:
+                  print(f"Error fetching Airtable data: {e}")
+                  return set()
+          
+          def get_recent_reels(username, cookies_file, max_items=5):
+              """Get recent reels from Instagram account"""
+              try:
+                  cmd = [
+                      'yt-dlp',
+                      '--cookies', cookies_file,
+                      '--flat-playlist',
+                      '--playlist-end', str(max_items),
+                      '--dump-json',
+                      f'https://www.instagram.com/{username}/reels/'
+                  ]
+                  
+                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                  
+                  if result.returncode != 0:
+                      print(f"Error getting reels from {username}: {result.stderr}")
+                      return []
+                  
+                  reels = []
+                  for line in result.stdout.strip().split('\n'):
+                      if line.strip():
+                          try:
+                              data = json.loads(line)
+                              reels.append({
+                                  'url': data.get('url'),
+                                  'title': data.get('title', ''),
+                                  'upload_date': data.get('upload_date'),
+                                  'id': data.get('id')
+                              })
+                          except json.JSONDecodeError:
+                              continue
+                  
+                  return reels
+              except subprocess.TimeoutExpired:
+                  print(f"Timeout while checking {username}")
+                  return []
+              except Exception as e:
+                  print(f"Error checking {username}: {e}")
+                  return []
+          
+          def is_recent_reel(upload_date, hours=24):
+              """Check if reel was uploaded within specified hours"""
+              if not upload_date:
+                  return False
+              
+              try:
+                  upload_dt = datetime.strptime(upload_date, '%Y%m%d')
+                  cutoff = datetime.now() - timedelta(hours=hours)
+                  return upload_dt >= cutoff
+              except:
+                  return False
+          
+          def main():
+              force_check = os.environ.get('FORCE_CHECK', 'false').lower() == 'true'
+              processed_urls = get_airtable_processed_urls()
+              
+              print(f"Found {len(processed_urls)} already processed URLs")
+              
+              # Check primary account first
+              primary_account = os.environ.get('PRIMARY_ACCOUNT')
+              backup_account = os.environ.get('BACKUP_ACCOUNT')
+              
+              selected_reel = None
+              account_type = None
+              
+              if primary_account:
+                  print(f"Checking primary account: {primary_account}")
+                  primary_reels = get_recent_reels(primary_account, 'cookies.txt')
+                  
+                  for reel in primary_reels:
+                      if reel['url'] and reel['url'] not in processed_urls:
+                          if force_check or is_recent_reel(reel['upload_date']):
+                              selected_reel = reel
+                              account_type = 'primary'
+                              print(f"Found new reel from primary account: {reel['url']}")
+                              break
+              
+              # If no recent reel from primary, check backup account
+              if not selected_reel and backup_account:
+                  print(f"Checking backup account: {backup_account}")
+                  backup_reels = get_recent_reels(backup_account, 'backup_cookies.txt')
+                  
+                  for reel in backup_reels:
+                      if reel['url'] and reel['url'] not in processed_urls:
+                          if force_check or is_recent_reel(reel['upload_date']):
+                              selected_reel = reel
+                              account_type = 'backup'
+                              print(f"Found new reel from backup account: {reel['url']}")
+                              break
+              
+              if selected_reel:
+                  # Create output file for GitHub Actions
+                  output = {
+                      'found_reel': True,
+                      'url': selected_reel['url'],
+                      'title': selected_reel['title'],
+                      'account_type': account_type,
+                      'upload_date': selected_reel['upload_date']
+                  }
+                  
+                  with open('reel_check_result.json', 'w') as f:
+                      json.dump(output, f, indent=2)
+                  
+                  print(f"Selected reel: {selected_reel['url']}")
+                  
+                  # Set GitHub Actions outputs
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"found_reel=true\n")
+                      f.write(f"reel_url={selected_reel['url']}\n")
+                      f.write(f"account_type={account_type}\n")
+                  
+                  return 0
+              else:
+                  print("No new reels found")
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                      f.write(f"found_reel=false\n")
+                  return 0
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          EOF
+          
+      - name: Check for New Reels
+        id: check_reels
+        env:
+          FORCE_CHECK: ${{ github.event.inputs.force_check }}
+        run: python check_instagram.py
+        
+      - name: Trigger Download Workflow
+        if: steps.check_reels.outputs.found_reel == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const response = await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'download.yml',
+              ref: 'main',
+              inputs: {
+                url: '${{ steps.check_reels.outputs.reel_url }}',
+                account_type: '${{ steps.check_reels.outputs.account_type }}'
+              }
+            });
+            
+            console.log('Triggered download workflow for:', '${{ steps.check_reels.outputs.reel_url }}');
+            
+      - name: Upload Check Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-check-results
+          path: |
+            reel_check_result.json
+          retention-days: 1

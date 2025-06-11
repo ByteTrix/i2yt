@@ -7,6 +7,11 @@ on:
         description: 'Media URL'
         required: true
         type: string
+      account_type:
+        description: 'Account Type (primary/backup)'
+        required: false
+        type: string
+        default: 'primary'
 
 jobs:
   fetch:
@@ -45,16 +50,20 @@ jobs:
             sudo apt update && sudo apt install -y ffmpeg
           else
             echo "ffmpeg already installed"
-          fi
+          fi      
       - name: Write Cookies to File
-        run: echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
+        run: |
+          if [ "${{ github.event.inputs.account_type }}" = "backup" ]; then
+            echo "${{ secrets.BACKUP_INSTA_COOKIES }}" > cookies.txt
+          else
+            echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
+          fi
       
       - name: Get Media Description
         run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" --get-description > description.txt
-      
       - name: Get Media
         run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.mp4" --recode-video mp4
-
+        
       - name: Upload Media as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -63,3 +72,19 @@ jobs:
             reel.mp4
             description.txt
           retention-days: 1
+
+      - name: Trigger Processing Webhook
+        if: success()
+        run: |         
+         curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "repository": "${{ github.repository }}",
+              "workflow": "download.yml",
+              "run_id": "${{ github.run_id }}",
+              "status": "completed",
+              "artifact_name": "media",
+              "account_type": "${{ github.event.inputs.account_type }}",
+              "source_url": "${{ github.event.inputs.url }}",
+              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+            }'
