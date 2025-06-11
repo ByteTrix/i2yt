@@ -14,17 +14,38 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v4      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.12      
+          python-version: 3.12
+
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-yt-dlp
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Cache APT packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-ffmpeg
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: Install yt-dlp
         run: pip install -U yt-dlp
 
       - name: Install ffmpeg
-        run: sudo apt update && sudo apt install -y ffmpeg
+        run: |
+          if ! command -v ffmpeg &> /dev/null; then
+            sudo apt update && sudo apt install -y ffmpeg
+          else
+            echo "ffmpeg already installed"
+          fi
       - name: Write Cookies to File
         run: echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
       
