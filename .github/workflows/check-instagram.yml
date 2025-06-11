@@ -39,10 +39,12 @@ jobs:
           key: ${{ runner.os }}-pip-insta-checker
           restore-keys: |
             ${{ runner.os }}-pip-
-            
+              
       - name: Install Dependencies
         run: |
           pip install -U yt-dlp requests python-dateutil
+          # Install Instagram-specific requirements
+          pip install instaloader 2>/dev/null || echo "Optional: instaloader not installed"
           
       - name: Write Instagram Cookies
         run: |
@@ -84,36 +86,43 @@ jobs:
               except Exception as e:
                   print(f"Error fetching Airtable data: {e}")
                   return set()
-          
-          def get_recent_reels(username, cookies_file, max_items=5):
+            def get_recent_reels(username, cookies_file, max_items=10):
               """Get recent reels from Instagram account"""
               try:
+                  # First, get the user's posts and filter for reels
                   cmd = [
                       'yt-dlp',
                       '--cookies', cookies_file,
                       '--flat-playlist',
                       '--playlist-end', str(max_items),
                       '--dump-json',
-                      f'https://www.instagram.com/{username}/reels/'
+                      '--match-filter', 'duration < 90',  # Reels are typically under 90 seconds
+                      f'https://www.instagram.com/{username}/'
                   ]
                   
-                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
                   
                   if result.returncode != 0:
-                      print(f"Error getting reels from {username}: {result.stderr}")
-                      return []
+                      print(f"Error getting posts from {username}: {result.stderr}")
+                      # Try alternative approach - check specific reel URLs if main profile fails
+                      return get_reels_alternative(username, cookies_file, max_items)
                   
                   reels = []
                   for line in result.stdout.strip().split('\n'):
                       if line.strip():
                           try:
                               data = json.loads(line)
-                              reels.append({
-                                  'url': data.get('url'),
-                                  'title': data.get('title', ''),
-                                  'upload_date': data.get('upload_date'),
-                                  'id': data.get('id')
-                              })
+                              # Filter for reel content (short videos)
+                              if (data.get('duration', 0) > 0 and data.get('duration', 0) <= 90 and 
+                                  '/reel/' in data.get('url', '') or 
+                                  data.get('format_id', '').startswith('reel')):
+                                  reels.append({
+                                      'url': data.get('url'),
+                                      'title': data.get('title', ''),
+                                      'upload_date': data.get('upload_date'),
+                                      'id': data.get('id'),
+                                      'duration': data.get('duration', 0)
+                                  })
                           except json.JSONDecodeError:
                               continue
                   
@@ -125,16 +134,79 @@ jobs:
                   print(f"Error checking {username}: {e}")
                   return []
           
-          def is_recent_reel(upload_date, hours=24):
+          def get_reels_alternative(username, cookies_file, max_items=5):
+              """Alternative method to get recent posts and identify reels"""
+              try:
+                  cmd = [
+                      'yt-dlp',
+                      '--cookies', cookies_file,
+                      '--flat-playlist',
+                      '--playlist-start', '1',
+                      '--playlist-end', str(max_items * 2),  # Get more to filter
+                      '--dump-json',
+                      f'https://www.instagram.com/{username}/'
+                  ]
+                  
+                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                  
+                  if result.returncode != 0:
+                      print(f"Alternative method also failed for {username}: {result.stderr}")
+                      return []
+                  
+                  reels = []
+                  for line in result.stdout.strip().split('\n'):
+                      if line.strip():
+                          try:
+                              data = json.loads(line)
+                              url = data.get('url', '')
+                              # Check if it's a reel based on URL pattern or short duration
+                              if ('/reel/' in url or 
+                                  (data.get('duration', 0) > 0 and data.get('duration', 0) <= 90)):
+                                  reels.append({
+                                      'url': url,
+                                      'title': data.get('title', ''),
+                                      'upload_date': data.get('upload_date'),
+                                      'id': data.get('id'),
+                                      'duration': data.get('duration', 0)
+                                  })
+                          except json.JSONDecodeError:
+                              continue
+                  
+                  return reels[:max_items]  # Return only requested number
+              except Exception as e:
+                  print(f"Alternative method error for {username}: {e}")
+                  return []
+                  print(f"Timeout while checking {username}")
+                  return []
+              except Exception as e:
+                  print(f"Error checking {username}: {e}")
+                  return []
+            def is_recent_reel(upload_date, hours=24):
               """Check if reel was uploaded within specified hours"""
               if not upload_date:
                   return False
               
               try:
-                  upload_dt = datetime.strptime(upload_date, '%Y%m%d')
-                  cutoff = datetime.now() - timedelta(hours=hours)
-                  return upload_dt >= cutoff
-              except:
+                  # Try different date formats
+                  upload_dt = None
+                  
+                  # Format: YYYYMMDD
+                  if len(upload_date) == 8 and upload_date.isdigit():
+                      upload_dt = datetime.strptime(upload_date, '%Y%m%d')
+                  # Format: YYYY-MM-DD
+                  elif '-' in upload_date and len(upload_date) >= 10:
+                      upload_dt = datetime.strptime(upload_date[:10], '%Y-%m-%d')
+                  # Format: timestamp
+                  elif upload_date.isdigit():
+                      upload_dt = datetime.fromtimestamp(int(upload_date))
+                  
+                  if upload_dt:
+                      cutoff = datetime.now() - timedelta(hours=hours)
+                      return upload_dt >= cutoff
+                  
+                  return False
+              except Exception as e:
+                  print(f"Error parsing date {upload_date}: {e}")
                   return False
           
           def main():
@@ -149,31 +221,43 @@ jobs:
               
               selected_reel = None
               account_type = None
-              
-              if primary_account:
+                if primary_account:
                   print(f"Checking primary account: {primary_account}")
                   primary_reels = get_recent_reels(primary_account, 'cookies.txt')
+                  print(f"Found {len(primary_reels)} potential reels from primary account")
                   
-                  for reel in primary_reels:
+                  for i, reel in enumerate(primary_reels):
+                      print(f"Reel {i+1}: {reel.get('url', 'No URL')} - Duration: {reel.get('duration', 'Unknown')}s - Date: {reel.get('upload_date', 'Unknown')}")
                       if reel['url'] and reel['url'] not in processed_urls:
                           if force_check or is_recent_reel(reel['upload_date']):
                               selected_reel = reel
                               account_type = 'primary'
-                              print(f"Found new reel from primary account: {reel['url']}")
+                              print(f"✓ Selected new reel from primary account: {reel['url']}")
                               break
+                          else:
+                              print(f"  - Skipped (not recent or already processed)")
+                      else:
+                          print(f"  - Skipped (no URL or already processed)")
               
               # If no recent reel from primary, check backup account
               if not selected_reel and backup_account:
+                  print(f"No suitable reel found in primary account")
                   print(f"Checking backup account: {backup_account}")
                   backup_reels = get_recent_reels(backup_account, 'backup_cookies.txt')
+                  print(f"Found {len(backup_reels)} potential reels from backup account")
                   
-                  for reel in backup_reels:
+                  for i, reel in enumerate(backup_reels):
+                      print(f"Reel {i+1}: {reel.get('url', 'No URL')} - Duration: {reel.get('duration', 'Unknown')}s - Date: {reel.get('upload_date', 'Unknown')}")
                       if reel['url'] and reel['url'] not in processed_urls:
                           if force_check or is_recent_reel(reel['upload_date']):
                               selected_reel = reel
                               account_type = 'backup'
-                              print(f"Found new reel from backup account: {reel['url']}")
+                              print(f"✓ Selected new reel from backup account: {reel['url']}")
                               break
+                          else:
+                              print(f"  - Skipped (not recent)")
+                      else:
+                          print(f"  - Skipped (no URL or already processed)")
               
               if selected_reel:
                   # Create output file for GitHub Actions
@@ -206,6 +290,24 @@ jobs:
           if __name__ == "__main__":
               sys.exit(main())
           EOF
+          
+      - name: Test Instagram Connection
+        run: |
+          echo "Testing Instagram connection with primary account..."
+          if [ -f cookies.txt ] && [ -s cookies.txt ]; then
+            echo "Primary cookies file exists and is not empty"
+            # Test basic yt-dlp functionality
+            yt-dlp --cookies cookies.txt --list-formats "https://www.instagram.com/${{ env.PRIMARY_ACCOUNT }}/" || echo "Primary account test failed"
+          else
+            echo "Primary cookies file is missing or empty"
+          fi
+          
+          if [ -f backup_cookies.txt ] && [ -s backup_cookies.txt ]; then
+            echo "Backup cookies file exists and is not empty" 
+            yt-dlp --cookies backup_cookies.txt --list-formats "https://www.instagram.com/${{ env.BACKUP_ACCOUNT }}/" || echo "Backup account test failed"
+          else
+            echo "Backup cookies file is missing or empty"
+          fi
           
       - name: Check for New Reels
         id: check_reels

@@ -236,24 +236,43 @@
     },
     {
       "parameters": {
+        "path": "9737cee1-bd24-4beb-8b0d-a0779104a74b",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        140
+      ],
+      "id": "ce03f4e4-eaf9-4a61-9fe4-64f210d35663",
+      "name": "Webhook",
+      "webhookId": "9737cee1-bd24-4beb-8b0d-a0779104a74b"
+    },
+    {
+      "parameters": {
         "operation": "create",
         "base": {
           "__rl": true,
           "value": "appcsAZ5JDZr6RsP1",
-          "mode": "list",
-          "cachedResultName": "i2yt",
-          "cachedResultUrl": "https://airtable.com/appcsAZ5JDZr6RsP1"
+          "mode": "id"
         },
         "table": {
           "__rl": true,
-          "value": "tblmKFwvhnrcblUpD",
-          "mode": "list",
-          "cachedResultName": "Table 1",
-          "cachedResultUrl": "https://airtable.com/appcsAZ5JDZr6RsP1/tblmKFwvhnrcblUpD"
+          "mode": "id",
+          "value": "tblmKFwvhnrcblUpD"
         },
         "columns": {
-          "mappingMode": "autoMapInputData",
-          "value": {},
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $('Webhook').item.json.source_url }}",
+            "account_type": "={{ $('Webhook').item.json.account_type || 'primary' }}",
+            "youtube_url": "={{ $json.html_url }}",
+            "status": "processed",
+            "date": "={{ new Date().toISOString() }}"
+          },
           "matchingColumns": [],
           "schema": [
             {
@@ -268,13 +287,52 @@
               "removed": false
             },
             {
-              "id": "Date",
-              "displayName": "Date",
+              "id": "date",
+              "displayName": "date",
               "required": false,
               "defaultMatch": false,
               "canBeUsedToMatch": true,
               "display": true,
               "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "account_type",
+              "displayName": "account_type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "youtube_url",
+              "displayName": "youtube_url",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "processed",
+                  "value": "processed"
+                }
+              ],
               "readOnly": false,
               "removed": false
             }
@@ -287,34 +345,17 @@
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
       "position": [
-        2220,
+        2200,
         180
       ],
-      "id": "2c72d573-017d-40a0-8281-268c2e724e78",
-      "name": "Airtable1",
+      "id": "b46e19a6-4d60-45ca-9dd5-dc808eb5e068",
+      "name": "Airtable - Track Processed1",
       "credentials": {
         "airtableTokenApi": {
           "id": "4bPpHpuS5pMDHJqC",
           "name": "Airtable Personal Access Token account"
         }
       }
-    },
-    {
-      "parameters": {
-        "path": "9737cee1-bd24-4beb-8b0d-a0779104a74b",
-        "options": {
-          "allowedOrigins": "*"
-        }
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        -300,
-        140
-      ],
-      "id": "ce03f4e4-eaf9-4a61-9fe4-64f210d35663",
-      "name": "Webhook",
-      "webhookId": "9737cee1-bd24-4beb-8b0d-a0779104a74b"
     }
   ],
   "connections": {
@@ -420,7 +461,7 @@
             "index": 0
           },
           {
-            "node": "Airtable1",
+            "node": "Airtable - Track Processed1",
             "type": "main",
             "index": 0
           }
