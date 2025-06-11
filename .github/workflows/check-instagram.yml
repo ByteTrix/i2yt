@@ -49,7 +49,7 @@ jobs:
           echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
           echo "${{ secrets.BACKUP_INSTA_COOKIES }}" > backup_cookies.txt
           
-      - name: Create Instagram Scraper Script      - name: Create Instagram Scraper Script
+      - name: Create Instagram Scraper Script
         run: |
           cat > check_instagram.py << 'EOF'
           import json
