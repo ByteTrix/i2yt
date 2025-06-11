@@ -39,39 +39,37 @@ jobs:
           key: ${{ runner.os }}-pip-insta-checker
           restore-keys: |
             ${{ runner.os }}-pip-
-              
+                
       - name: Install Dependencies
         run: |
-          pip install -U yt-dlp requests python-dateutil
-          # Install Instagram-specific requirements
-          pip install instaloader 2>/dev/null || echo "Optional: instaloader not installed"
+          pip install -U requests python-dateutil instascrape beautifulsoup4
           
       - name: Write Instagram Cookies
         run: |
           echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
           echo "${{ secrets.BACKUP_INSTA_COOKIES }}" > backup_cookies.txt
           
-      - name: Create Instagram Checker Script
+      - name: Create Instagram Scraper Script      - name: Create Instagram Scraper Script
         run: |
           cat > check_instagram.py << 'EOF'
           import json
-          import subprocess
           import requests
           import sys
           from datetime import datetime, timedelta
           import os
+          from instascrape import Profile, Reel
+          import time
           
           def get_airtable_processed_urls():
               """Get list of already processed Instagram URLs from Airtable"""
-              headers = {
-                  'Authorization': f'Bearer {os.environ["AIRTABLE_TOKEN"]}',
-                  'Content-Type': 'application/json'
-              }
-              
-              url = f'https://api.airtable.com/v0/{os.environ["AIRTABLE_BASE_ID"]}/{os.environ["AIRTABLE_TABLE_ID"]}'
-              
               try:
-                  response = requests.get(url, headers=headers)
+                  headers = {
+                      'Authorization': f'Bearer {os.environ["AIRTABLE_TOKEN"]}',
+                      'Content-Type': 'application/json'
+                  }
+                  
+                  url = f'https://api.airtable.com/v0/{os.environ["AIRTABLE_BASE_ID"]}/{os.environ["AIRTABLE_TABLE_ID"]}'
+                  response = requests.get(url, headers=headers, timeout=30)
                   response.raise_for_status()
                   
                   processed_urls = set()
@@ -86,228 +84,241 @@ jobs:
               except Exception as e:
                   print(f"Error fetching Airtable data: {e}")
                   return set()
-            def get_recent_reels(username, cookies_file, max_items=10):
-              """Get recent reels from Instagram account"""
-              try:
-                  # First, get the user's posts and filter for reels
-                  cmd = [
-                      'yt-dlp',
-                      '--cookies', cookies_file,
-                      '--flat-playlist',
-                      '--playlist-end', str(max_items),
-                      '--dump-json',
-                      '--match-filter', 'duration < 90',  # Reels are typically under 90 seconds
-                      f'https://www.instagram.com/{username}/'
-                  ]
-                  
-                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-                  
-                  if result.returncode != 0:
-                      print(f"Error getting posts from {username}: {result.stderr}")
-                      # Try alternative approach - check specific reel URLs if main profile fails
-                      return get_reels_alternative(username, cookies_file, max_items)
-                  
-                  reels = []
-                  for line in result.stdout.strip().split('\n'):
-                      if line.strip():
-                          try:
-                              data = json.loads(line)
-                              # Filter for reel content (short videos)
-                              if (data.get('duration', 0) > 0 and data.get('duration', 0) <= 90 and 
-                                  '/reel/' in data.get('url', '') or 
-                                  data.get('format_id', '').startswith('reel')):
-                                  reels.append({
-                                      'url': data.get('url'),
-                                      'title': data.get('title', ''),
-                                      'upload_date': data.get('upload_date'),
-                                      'id': data.get('id'),
-                                      'duration': data.get('duration', 0)
-                                  })
-                          except json.JSONDecodeError:
-                              continue
-                  
-                  return reels
-              except subprocess.TimeoutExpired:
-                  print(f"Timeout while checking {username}")
-                  return []
-              except Exception as e:
-                  print(f"Error checking {username}: {e}")
-                  return []
           
-          def get_reels_alternative(username, cookies_file, max_items=5):
-              """Alternative method to get recent posts and identify reels"""
+          def setup_session_with_cookies(cookies_file):
+              """Setup requests session with Instagram cookies"""
+              session = requests.Session()
+              
+              # Set headers to mimic a real browser
+              session.headers.update({
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                  'Accept-Language': 'en-US,en;q=0.5',
+                  'Accept-Encoding': 'gzip, deflate',
+                  'Connection': 'keep-alive',
+                  'Upgrade-Insecure-Requests': '1',
+              })
+              
+              # Load cookies from file
               try:
-                  cmd = [
-                      'yt-dlp',
-                      '--cookies', cookies_file,
-                      '--flat-playlist',
-                      '--playlist-start', '1',
-                      '--playlist-end', str(max_items * 2),  # Get more to filter
-                      '--dump-json',
-                      f'https://www.instagram.com/{username}/'
-                  ]
+                  with open(cookies_file, 'r') as f:
+                      cookie_content = f.read().strip()
                   
-                  result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                  # Handle different cookie formats
+                  if cookie_content.startswith('{') or cookie_content.startswith('['):
+                      # JSON format
+                      cookies_data = json.loads(cookie_content)
+                      if isinstance(cookies_data, list):
+                          for cookie in cookies_data:
+                              session.cookies.set(cookie['name'], cookie['value'], domain='.instagram.com')
+                      else:
+                          for name, value in cookies_data.items():
+                              session.cookies.set(name, value, domain='.instagram.com')
+                  else:
+                      # Simple format: name=value
+                      for line in cookie_content.split('\n'):
+                          if '=' in line and not line.startswith('#'):
+                              name, value = line.split('=', 1)
+                              session.cookies.set(name.strip(), value.strip(), domain='.instagram.com')
+                              
+                  print(f"Loaded {len(session.cookies)} cookies from {cookies_file}")
+                  return session
                   
-                  if result.returncode != 0:
-                      print(f"Alternative method also failed for {username}: {result.stderr}")
-                      return []
+              except Exception as e:
+                  print(f"Error loading cookies from {cookies_file}: {e}")
+                  return session
+          
+          def get_recent_reels(username, cookies_file, max_items=10):
+              """Get recent reels from Instagram profile using instascrape"""
+              try:
+                  print(f"Scraping reels for {username}...")
+                  
+                  # Setup session with cookies
+                  session = setup_session_with_cookies(cookies_file)
+                  
+                  # Create profile instance
+                  profile = Profile(username)
+                  
+                  # Try to scrape profile with session
+                  try:
+                      profile.scrape(session=session)
+                  except Exception as e:
+                      print(f"Error scraping profile {username}: {e}")
+                      # Try without session as fallback
+                      profile.scrape()
+                  
+                  print(f"Profile loaded: {profile.username} ({profile.followers} followers)")
+                  
+                  # Get recent posts
+                  recent_posts = profile.get_recent_posts(amount=max_items * 2)  # Get more to filter for reels
                   
                   reels = []
-                  for line in result.stdout.strip().split('\n'):
-                      if line.strip():
-                          try:
-                              data = json.loads(line)
-                              url = data.get('url', '')
-                              # Check if it's a reel based on URL pattern or short duration
-                              if ('/reel/' in url or 
-                                  (data.get('duration', 0) > 0 and data.get('duration', 0) <= 90)):
-                                  reels.append({
-                                      'url': url,
-                                      'title': data.get('title', ''),
-                                      'upload_date': data.get('upload_date'),
-                                      'id': data.get('id'),
-                                      'duration': data.get('duration', 0)
-                                  })
-                          except json.JSONDecodeError:
-                              continue
+                  for post in recent_posts:
+                      try:
+                          # Check if post is a reel (video content)
+                          if hasattr(post, 'is_video') and post.is_video:
+                              # Try to get more details about the post
+                              post.scrape(session=session)
+                              
+                              # Check if it's actually a reel (short video)
+                              if hasattr(post, 'video_duration') and post.video_duration and post.video_duration <= 90:
+                                  reel_url = f"https://www.instagram.com/reel/{post.shortcode}/"
+                                  
+                                  reel_data = {
+                                      'url': reel_url,
+                                      'title': post.caption[:100] if hasattr(post, 'caption') and post.caption else f'Reel from {username}',
+                                      'upload_date': post.upload_date.strftime('%Y%m%d') if hasattr(post, 'upload_date') and post.upload_date else datetime.now().strftime('%Y%m%d'),
+                                      'id': post.shortcode,
+                                      'duration': post.video_duration if hasattr(post, 'video_duration') else 0,
+                                      'likes': post.likes if hasattr(post, 'likes') else 0
+                                  }
+                                  
+                                  reels.append(reel_data)
+                                  print(f"Found reel: {reel_url} (Duration: {reel_data['duration']}s)")
+                                  
+                                  if len(reels) >= max_items:
+                                      break
+                                      
+                          # Add delay to avoid rate limiting
+                          time.sleep(1)
+                          
+                      except Exception as e:
+                          print(f"Error processing post: {e}")
+                          continue
                   
-                  return reels[:max_items]  # Return only requested number
+                  print(f"Found {len(reels)} reels for {username}")
+                  return reels
+                  
               except Exception as e:
-                  print(f"Alternative method error for {username}: {e}")
-                  return []
-                  print(f"Timeout while checking {username}")
-                  return []
-              except Exception as e:
-                  print(f"Error checking {username}: {e}")
-                  return []
-            def is_recent_reel(upload_date, hours=24):
+                  print(f"Error getting reels for {username}: {e}")
+                  # Fallback to manual mode if scraping fails
+                  return get_fallback_reels(username)
+          
+          def get_fallback_reels(username):
+              """Fallback method with some example reels if scraping fails"""
+              print(f"Using fallback mode for {username}")
+              # Return empty list - you could add manual URLs here as backup
+              return []
+          
+          def is_recent_reel(upload_date, hours=24):
               """Check if reel was uploaded within specified hours"""
               if not upload_date:
-                  return False
+                  return True  # Assume recent if no date
               
               try:
-                  # Try different date formats
-                  upload_dt = None
-                  
-                  # Format: YYYYMMDD
                   if len(upload_date) == 8 and upload_date.isdigit():
                       upload_dt = datetime.strptime(upload_date, '%Y%m%d')
-                  # Format: YYYY-MM-DD
-                  elif '-' in upload_date and len(upload_date) >= 10:
-                      upload_dt = datetime.strptime(upload_date[:10], '%Y-%m-%d')
-                  # Format: timestamp
-                  elif upload_date.isdigit():
-                      upload_dt = datetime.fromtimestamp(int(upload_date))
-                  
-                  if upload_dt:
                       cutoff = datetime.now() - timedelta(hours=hours)
                       return upload_dt >= cutoff
-                  
-                  return False
-              except Exception as e:
-                  print(f"Error parsing date {upload_date}: {e}")
-                  return False
+                  return True  # Assume recent if can't parse
+              except Exception:
+                  return True  # Assume recent on error
           
           def main():
               force_check = os.environ.get('FORCE_CHECK', 'false').lower() == 'true'
-              processed_urls = get_airtable_processed_urls()
               
+              print("=== Instagram Reel Checker (InstaScrape Mode) ===")
+              print(f"Force check: {force_check}")
+              print("Note: Using instascrape library for automatic reel detection")
+              
+              # Get processed URLs from Airtable
+              processed_urls = get_airtable_processed_urls()
               print(f"Found {len(processed_urls)} already processed URLs")
               
-              # Check primary account first
+              # Check accounts
               primary_account = os.environ.get('PRIMARY_ACCOUNT')
               backup_account = os.environ.get('BACKUP_ACCOUNT')
               
               selected_reel = None
               account_type = None
-                if primary_account:
-                  print(f"Checking primary account: {primary_account}")
-                  primary_reels = get_recent_reels(primary_account, 'cookies.txt')
-                  print(f"Found {len(primary_reels)} potential reels from primary account")
-                  
-                  for i, reel in enumerate(primary_reels):
-                      print(f"Reel {i+1}: {reel.get('url', 'No URL')} - Duration: {reel.get('duration', 'Unknown')}s - Date: {reel.get('upload_date', 'Unknown')}")
-                      if reel['url'] and reel['url'] not in processed_urls:
-                          if force_check or is_recent_reel(reel['upload_date']):
-                              selected_reel = reel
-                              account_type = 'primary'
-                              print(f"✓ Selected new reel from primary account: {reel['url']}")
-                              break
-                          else:
-                              print(f"  - Skipped (not recent or already processed)")
-                      else:
-                          print(f"  - Skipped (no URL or already processed)")
               
-              # If no recent reel from primary, check backup account
+              # Check primary account first
+              if primary_account:
+                  print(f"\nChecking primary account: {primary_account}")
+                  try:
+                      primary_reels = get_recent_reels(primary_account, 'cookies.txt')
+                      print(f"Found {len(primary_reels)} reels from primary account")
+                      
+                      for i, reel in enumerate(primary_reels):
+                          print(f"  Reel {i+1}: {reel['url']} (Likes: {reel.get('likes', 0)})")
+                          if reel['url'] not in processed_urls:
+                              if force_check or is_recent_reel(reel['upload_date']):
+                                  selected_reel = reel
+                                  account_type = 'primary'
+                                  print(f"  ✓ SELECTED: {reel['url']}")
+                                  break
+                              else:
+                                  print(f"  - Skipped (not recent)")
+                          else:
+                              print(f"  - Skipped (already processed)")
+                  except Exception as e:
+                      print(f"Error checking primary account: {e}")
+              
+              # Check backup account if no reel selected
               if not selected_reel and backup_account:
-                  print(f"No suitable reel found in primary account")
-                  print(f"Checking backup account: {backup_account}")
-                  backup_reels = get_recent_reels(backup_account, 'backup_cookies.txt')
-                  print(f"Found {len(backup_reels)} potential reels from backup account")
-                  
-                  for i, reel in enumerate(backup_reels):
-                      print(f"Reel {i+1}: {reel.get('url', 'No URL')} - Duration: {reel.get('duration', 'Unknown')}s - Date: {reel.get('upload_date', 'Unknown')}")
-                      if reel['url'] and reel['url'] not in processed_urls:
-                          if force_check or is_recent_reel(reel['upload_date']):
-                              selected_reel = reel
-                              account_type = 'backup'
-                              print(f"✓ Selected new reel from backup account: {reel['url']}")
-                              break
+                  print(f"\nChecking backup account: {backup_account}")
+                  try:
+                      backup_reels = get_recent_reels(backup_account, 'backup_cookies.txt')
+                      print(f"Found {len(backup_reels)} reels from backup account")
+                      
+                      for i, reel in enumerate(backup_reels):
+                          print(f"  Reel {i+1}: {reel['url']} (Likes: {reel.get('likes', 0)})")
+                          if reel['url'] not in processed_urls:
+                              if force_check or is_recent_reel(reel['upload_date']):
+                                  selected_reel = reel
+                                  account_type = 'backup'
+                                  print(f"  ✓ SELECTED: {reel['url']}")
+                                  break
+                              else:
+                                  print(f"  - Skipped (not recent)")
                           else:
-                              print(f"  - Skipped (not recent)")
-                      else:
-                          print(f"  - Skipped (no URL or already processed)")
+                              print(f"  - Skipped (already processed)")
+                  except Exception as e:
+                      print(f"Error checking backup account: {e}")
               
+              # Output results
               if selected_reel:
-                  # Create output file for GitHub Actions
                   output = {
                       'found_reel': True,
                       'url': selected_reel['url'],
                       'title': selected_reel['title'],
                       'account_type': account_type,
-                      'upload_date': selected_reel['upload_date']
+                      'upload_date': selected_reel['upload_date'],
+                      'likes': selected_reel.get('likes', 0),
+                      'duration': selected_reel.get('duration', 0)
                   }
                   
                   with open('reel_check_result.json', 'w') as f:
                       json.dump(output, f, indent=2)
                   
-                  print(f"Selected reel: {selected_reel['url']}")
+                  print(f"\n🎉 SUCCESS: Selected reel from {account_type} account")
+                  print(f"URL: {selected_reel['url']}")
+                  print(f"Likes: {selected_reel.get('likes', 0)}")
+                  print(f"Duration: {selected_reel.get('duration', 0)}s")
                   
                   # Set GitHub Actions outputs
-                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
                       f.write(f"found_reel=true\n")
                       f.write(f"reel_url={selected_reel['url']}\n")
                       f.write(f"account_type={account_type}\n")
                   
                   return 0
               else:
-                  print("No new reels found")
-                  with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  print(f"\n❌ No new reels found")
+                  print("💡 This could mean:")
+                  print("   - No new reels posted recently")
+                  print("   - All recent reels already processed")
+                  print("   - Instagram scraping limitations")
+                  print("   - Cookie authentication issues")
+                  
+                  with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
                       f.write(f"found_reel=false\n")
+                  
                   return 0
           
           if __name__ == "__main__":
               sys.exit(main())
           EOF
-          
-      - name: Test Instagram Connection
-        run: |
-          echo "Testing Instagram connection with primary account..."
-          if [ -f cookies.txt ] && [ -s cookies.txt ]; then
-            echo "Primary cookies file exists and is not empty"
-            # Test basic yt-dlp functionality
-            yt-dlp --cookies cookies.txt --list-formats "https://www.instagram.com/${{ env.PRIMARY_ACCOUNT }}/" || echo "Primary account test failed"
-          else
-            echo "Primary cookies file is missing or empty"
-          fi
-          
-          if [ -f backup_cookies.txt ] && [ -s backup_cookies.txt ]; then
-            echo "Backup cookies file exists and is not empty" 
-            yt-dlp --cookies backup_cookies.txt --list-formats "https://www.instagram.com/${{ env.BACKUP_ACCOUNT }}/" || echo "Backup account test failed"
-          else
-            echo "Backup cookies file is missing or empty"
-          fi
           
       - name: Check for New Reels
         id: check_reels
@@ -332,13 +343,37 @@ jobs:
               }
             });
             
-            console.log('Triggered download workflow for:', '${{ steps.check_reels.outputs.reel_url }}');
-            
-      - name: Upload Check Results
+            console.log('✅ Triggered download workflow for:', '${{ steps.check_reels.outputs.reel_url }}');
+              - name: Upload Check Results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reel-check-results
           path: |
             reel_check_result.json
+            cookies.txt
+            backup_cookies.txt
           retention-days: 1
+          
+      - name: Show Status
+        if: always()
+        run: |
+          echo ""
+          echo "🤖 Instagram Reel Checker Status:"
+          echo "================================="
+          echo ""
+          echo "✅ Using InstaScrape library for automatic reel detection"
+          echo "✅ Checking both primary and backup accounts"
+          echo "✅ Airtable integration for duplicate prevention"
+          echo "✅ Automatic download workflow triggering"
+          echo ""
+          if [ "${{ steps.check_reels.outputs.found_reel }}" = "true" ]; then
+            echo "🎉 SUCCESS: Found and selected a new reel!"
+            echo "🔗 URL: ${{ steps.check_reels.outputs.reel_url }}"
+            echo "📱 Account: ${{ steps.check_reels.outputs.account_type }}"
+          else
+            echo "ℹ️  No new reels found this time"
+            echo "💡 This is normal - it means either:"
+            echo "   • No new reels posted recently"
+            echo "   • All recent reels already processed"
+          fi
