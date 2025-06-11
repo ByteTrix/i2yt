@@ -1,15 +1,15 @@
-name: Insta Reel Downloader
+name: Media Fetcher
 
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'Instagram Reel URL'
+        description: 'Media URL'
         required: true
         type: string
 
 jobs:
-  download:
+  fetch:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,16 +22,15 @@ jobs:
           python-version: 3.12
 
       - name: Install yt-dlp
-        run: pip install -U yt-dlp
-
+        run: pip install -U yt-dlp      
       - name: Write Cookies to File
         run: echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
 
-      - name: Download Instagram Reel
+      - name: Get Instagram Media
         run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.%(ext)s"
 
-      - name: Upload Reel as Artifact
+      - name: Upload Media as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: instagram-reel
+          name: instagram-media
           path: reel.*
