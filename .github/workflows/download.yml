@@ -19,8 +19,7 @@ on:
 
 jobs:
   fetch:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-latest    
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4      
@@ -30,33 +29,142 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Generate cache keys with permanent caching
+        id: cache-keys
+        run: |
+          # Use a stable cache key that doesn't rotate (permanent cache)
+          CACHE_DATE="permanent-v1"
+          echo "cache-date=$CACHE_DATE" >> $GITHUB_OUTPUT
+          echo "📅 Using permanent cache key: $CACHE_DATE"
+
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-yt-dlp
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}-yt-dlp-${{ steps.cache-keys.outputs.cache-date }}
           restore-keys: |
+            ${{ runner.os }}-pip-yt-dlp-
             ${{ runner.os }}-pip-
-
-      - name: Cache APT packages
+          save-always: true      
+      - name: Cache APT packages (user-accessible only)
         uses: actions/cache@v4
         with:
-          path: /var/cache/apt
-          key: ${{ runner.os }}-apt-ffmpeg
+          path: |
+            ~/.cache/apt-archives
+            ~/.local/bin/ffmpeg
+            ~/.local/bin/ffprobe
+            ~/.local/lib
+          key: ${{ runner.os }}-ffmpeg-userspace-${{ steps.cache-keys.outputs.cache-date }}
           restore-keys: |
-            ${{ runner.os }}-apt-
+            ${{ runner.os }}-ffmpeg-userspace-
+            ${{ runner.os }}-ffmpeg-
+          save-always: true
 
-      - name: Install yt-dlp
-        run: pip install -U yt-dlp
+      - name: Cache yt-dlp with update checking
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/bin/yt-dlp
+            ~/.cache/yt-dlp-version
+          key: ${{ runner.os }}-ytdlp-${{ steps.cache-keys.outputs.cache-date }}-${{ github.run_number }}
+          restore-keys: |
+            ${{ runner.os }}-ytdlp-${{ steps.cache-keys.outputs.cache-date }}-
+            ${{ runner.os }}-ytdlp-
+          save-always: true
 
-      - name: Install ffmpeg
+      - name: Install yt-dlp (with smart caching and updates)
         run: |
-          if ! command -v ffmpeg &> /dev/null; then
-            sudo apt update && sudo apt install -y ffmpeg
+          mkdir -p ~/.local/bin ~/.cache
+          
+          # Function to get latest yt-dlp version from GitHub API
+          get_latest_version() {
+            curl -s https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest | grep '"tag_name"' | cut -d'"' -f4
+          }
+          
+          # Check if yt-dlp is cached and get current version
+          if [ -f ~/.local/bin/yt-dlp ] && [ -f ~/.cache/yt-dlp-version ]; then
+            CACHED_VERSION=$(cat ~/.cache/yt-dlp-version)
+            LATEST_VERSION=$(get_latest_version)
+            
+            echo "📦 Cached yt-dlp version: $CACHED_VERSION"
+            echo "🔍 Latest yt-dlp version: $LATEST_VERSION"
+            
+            if [ "$CACHED_VERSION" = "$LATEST_VERSION" ]; then
+              echo "✅ yt-dlp is up to date, using cached version"
+              chmod +x ~/.local/bin/yt-dlp
+              echo "$HOME/.local/bin" >> $GITHUB_PATH
+              ~/.local/bin/yt-dlp --version
+            else
+              echo "🔄 New version available, updating yt-dlp..."
+              NEED_UPDATE=true
+            fi
           else
-            echo "ffmpeg already installed"
-          fi      
-
+            echo "📥 yt-dlp not found in cache, downloading..."
+            NEED_UPDATE=true
+          fi
+          
+          # Install or update yt-dlp if needed
+          if [ "$NEED_UPDATE" = "true" ]; then
+            echo "⏳ Installing/updating yt-dlp..."
+            
+            # Download latest yt-dlp binary
+            LATEST_VERSION=$(get_latest_version)
+            curl -L "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" -o ~/.local/bin/yt-dlp
+            chmod +x ~/.local/bin/yt-dlp
+            
+            # Save version info for next run
+            echo "$LATEST_VERSION" > ~/.cache/yt-dlp-version
+            
+            echo "✅ yt-dlp $LATEST_VERSION installed successfully"
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+            ~/.local/bin/yt-dlp --version
+          fi
+          
+          # Verify installation
+          if ! command -v yt-dlp &> /dev/null; then
+            echo "❌ yt-dlp installation failed"
+            exit 1
+          fi
+      - name: Install ffmpeg (with permanent user-space caching)
+        run: |
+          # Create user cache directories
+          mkdir -p ~/.cache/apt-archives ~/.local/bin ~/.local/lib
+          
+          # Check if ffmpeg is already cached in user space
+          if [ -f ~/.local/bin/ffmpeg ] && ~/.local/bin/ffmpeg -version &> /dev/null; then
+            echo "✅ ffmpeg found in user cache and working"
+            ~/.local/bin/ffmpeg -version | head -1
+            # Add to PATH for this session
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          else
+            echo "⏳ Installing ffmpeg to user space (this may take ~2 minutes)..."
+            
+            # Install to system first (fastest method)
+            sudo apt update
+            sudo apt install -y ffmpeg
+            
+            # Copy ffmpeg binaries and essential libraries to user space for caching
+            cp /usr/bin/ffmpeg ~/.local/bin/
+            cp /usr/bin/ffprobe ~/.local/bin/
+            
+            # Copy essential libraries (more selective to avoid permission issues)
+            mkdir -p ~/.local/lib/ffmpeg
+            find /usr/lib/x86_64-linux-gnu -name "libav*.so*" -exec cp {} ~/.local/lib/ffmpeg/ \; 2>/dev/null || true
+            find /usr/lib/x86_64-linux-gnu -name "libsw*.so*" -exec cp {} ~/.local/lib/ffmpeg/ \; 2>/dev/null || true
+            find /usr/lib/x86_64-linux-gnu -name "libpostproc*.so*" -exec cp {} ~/.local/lib/ffmpeg/ \; 2>/dev/null || true
+            
+            echo "✅ ffmpeg installation and caching completed"
+            ffmpeg -version | head -1
+            
+            # Add to PATH for this session
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+          
+          # Verify installation
+          if ! command -v ffmpeg &> /dev/null; then
+            echo "❌ ffmpeg installation failed"
+            exit 1
+          fi
       - name: Write Cookies to File
         run: |
           if [ "${{ github.event.inputs.account_type }}" = "backup" ]; then
