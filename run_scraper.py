@@ -85,6 +85,14 @@ def check_requirements():
 
 def main():
     """Main function to run the scraper with proper setup checks."""
+    # Setup UTF-8 encoding for Windows console
+    import sys
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+    except:
+        pass  # Fallback for older Python versions
+    
     print("🤖 Instagram Reel Scraper")
     print("=" * 50)
     

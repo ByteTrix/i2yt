@@ -52,15 +52,28 @@ class InstagramReelScraper:
         self.driver = None
         self.sheet = None
         self.collected_links = set()
+          # Setup logging with UTF-8 encoding support
+        import sys
         
-        # Setup logging
+        # Configure file handler with UTF-8 encoding
+        file_handler = logging.FileHandler('instagram_scraper.log', encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        
+        # Configure console handler with UTF-8 encoding for Windows compatibility
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        
+        # Try to set UTF-8 encoding for console on Windows
+        try:
+            if hasattr(sys.stdout, 'reconfigure'):
+                sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass  # Fallback for older Python versions or systems
+        
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[                
-                logging.FileHandler('instagram_scraper.log'),                
-                logging.StreamHandler()
-            ]
+            handlers=[file_handler, console_handler],
+            force=True  # Override existing configuration
         )
         self.logger = logging.getLogger(__name__)
     
@@ -831,10 +844,9 @@ class InstagramReelScraper:
                         
                         self.logger.info(f"URL {url} completed. Collected {len(url_links)} links.")
                         self.logger.info(f"Total links collected so far: {total_collected}")
-                        
-                        # Check if we've reached our target
+                          # Check if we've reached our target
                         if self.config.target_links > 0 and total_collected >= self.config.target_links:
-                            self.logger.info(f"🎯 Target of {self.config.target_links} links reached!")
+                            self.logger.info(f"TARGET REACHED: {self.config.target_links} links collected!")
                             target_reached = True
                             break
                     else:

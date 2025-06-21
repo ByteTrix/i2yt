@@ -2,202 +2,23 @@
   "nodes": [
     {
       "parameters": {
-        "url": "https://api.github.com/repos/kavinthangavel/i2yt/actions/workflows/download.yml/runs?status=success&per_page=1",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        480,
-        140
-      ],
-      "id": "d8c11abc-a510-495a-891c-bb998a03a2c8",
-      "name": "List Workflow Runs",
-      "credentials": {
-        "githubApi": {
-          "id": "dLPSz2KOLou6s3gw",
-          "name": "GitHub account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "url": "=https://api.github.com/repos/kavinthangavel/i2yt/actions/runs/{{$json[\"workflow_runs\"][0][\"id\"]}}/artifacts",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        700,
-        140
-      ],
-      "id": "6fe7de3a-4e6c-485d-9f07-0ce5a7321fb9",
-      "name": "Get Artifacts",
-      "credentials": {
-        "githubApi": {
-          "id": "dLPSz2KOLou6s3gw",
-          "name": "GitHub account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.artifacts[0].archive_download_url }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "githubApi",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/vnd.github+json"
-            }
-          ]
-        },
-        "options": {
-          "redirect": {
-            "redirect": {
-              "followRedirects": false
-            }
-          },
-          "response": {
-            "response": {
-              "fullResponse": true,
-              "neverError": true
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        900,
-        140
-      ],
-      "id": "04097ee3-18d0-433a-afb0-2eb37942c206",
-      "name": "Get Artifact ZIP Link",
-      "credentials": {
-        "githubApi": {
-          "id": "dLPSz2KOLou6s3gw",
-          "name": "GitHub account"
-        },
-        "httpHeaderAuth": {
-          "id": "h6YlYZSlZjMaj8CW",
-          "name": "Github PAT"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "url": "={{ $json.headers.location }}",
-        "options": {
-          "redirect": {
-            "redirect": {}
-          },
-          "response": {
-            "response": {
-              "responseFormat": "file"
-            }
-          }
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1120,
-        140
-      ],
-      "id": "aa0983fe-ce29-435c-8a1e-d0b484868989",
-      "name": "Download ZIP"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.compression",
-      "typeVersion": 1.1,
-      "position": [
-        1340,
-        140
-      ],
-      "id": "4733e57c-2772-4de4-a8c9-21b0ce06a14a",
-      "name": "Compression"
-    },
-    {
-      "parameters": {
-        "resource": "video",
-        "operation": "upload",
-        "title": "={{ $json.output }}",
-        "regionCode": "IN",
-        "categoryId": "27",
-        "binaryProperty": "file_1",
-        "options": {
-          "notifySubscribers": true,
-          "privacyStatus": "private"
-        }
-      },
-      "type": "n8n-nodes-base.youTube",
-      "typeVersion": 1,
-      "position": [
-        2640,
-        -60
-      ],
-      "id": "7bd40af1-de6d-45e8-8211-a8410e40a5d6",
-      "name": "YouTube",
-      "credentials": {
-        "youTubeOAuth2Api": {
-          "id": "cNOlsCAZOX64Ryn7",
-          "name": "YouTube account"
-        }
-      }
-    },
-    {
-      "parameters": {
         "promptType": "define",
         "text": "={{ $json.title }}",
+        "hasOutputParser": true,
         "options": {
-          "systemMessage": "this is a reels description,\ni need you to remove everything that's unrelated to title for youtube video,\nlike remove the sponsers,tags,etc..\nmake sure to crct the grammers,and make it in simple english"
+          "systemMessage": "=You are a YouTube Shorts optimization assistant.\n\nYour job is to transform messy Instagram Reel descriptions into clean, powerful, and engaging YouTube Shorts metadata that drives clicks and retention.\n\nFollow these strict instructions:\n\n---\n\n### 1. CLEAN THE INPUT  \n- Remove all hashtags, @mentions, URLs, emojis, brand/sponsor promotions, affiliate links, ads, \"credit to\", \"follow me\", app links, or unrelated filler text.  \n- Discard lines that include offers, discounts, shoutouts, credits, \"DM me\", \"comment below\", or \"link in bio\".\n\n---\n\n### 2. FIX GRAMMAR, TONE, & CLARITY  \n- Rewrite in **clear, emotionally resonant English**.  \n- Maintain a **motivational or stoic tone**.  \n- Focus on the **core idea or lesson** behind the content.  \n- Keep it inspiring, real, and accessible for a global audience.\n\n---\n\n### 3. GENERATE THE FOLLOWING OUTPUTS:\n\n#### 🔹 `title`:  \n- Max 50 characters.  \n- Must be emotionally powerful or thought-provoking.  \n- Use the core message of the video.  \n- If the input is unusable, invent a relevant stoic/mindset-based title.\n\n#### 🔹 `description`:  \n- At least 3–4 full lines of well-written, motivational content.  \n- Explain the core message clearly and connect it to everyday self-growth or mindset improvement.  \n- **Include relevant keywords and tags naturally** (e.g., self-discipline, motivation, mental strength, emotional control, etc.).  \n- Write in a way that hooks casual viewers and keeps them watching.\n\n#### 🔹 `tags`:  \n- Provide 5–10 **relevant keywords** only (no hashtags, no `#`).  \n- Tags should be related to personal growth, mindset, habits, discipline, motivation, etc.  \n- Example: `\"motivation\", \"mindset\", \"discipline\", \"emotional intelligence\", \"shorts\", \"growth\"`\n\n---\n\n### 4. ACTION TO TRIGGER\nUse tool to Close a task in Todoist.\n\n> This is mandatory and always must call tool.\n\n---\n\n### ✅ OUTPUT FORMAT  \nReturn your output **only** in the following valid JSON format:\n\n```json\n{\n  \"title\": \"Your YouTube Short Title\",\n  \"description\": \"A clean, emotionally powerful and detailed summary that includes motivational keywords, rewritten in correct grammar, free of all distractions or ads,also add some tags like #anime #stoic #trending\",\n  \"tags\": \"tag1, tag2, tag3, tag4, tag5\"\n}\n````\n\nDo **not** include explanations or any extra text.\n\nIf the input is unusable or contains only spam/ads, generate an original stoic/mindset-based output from scratch.\n\nEnsure the description is detailed, polished, and naturally includes the tags as part of the paragraph.\n\nAlways call tool without fail to close a task in todoist\n"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2,
       "position": [
-        1920,
-        340
+        1032,
+        280
       ],
       "id": "7418135b-6ad1-45d1-a4f4-b08a5c7e73fa",
       "name": "AI Agent",
-      "alwaysOutputData": false
-    },
-    {
-      "parameters": {
-        "operation": "text",
-        "binaryPropertyName": "file_0",
-        "destinationKey": "title",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.extractFromFile",
-      "typeVersion": 1,
-      "position": [
-        1560,
-        140
-      ],
-      "id": "6810b296-8009-43bb-90f8-a260b68bb3ed",
-      "name": "Extract from File"
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -207,8 +28,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1920,
-        600
+        1000,
+        500
       ],
       "id": "aaa095e1-1839-4185-8025-0968b53c0c03",
       "name": "Google Gemini Chat Model",
@@ -228,53 +49,31 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        2380,
-        40
+        1440,
+        30
       ],
       "id": "5953acdc-cd8c-4548-ab03-0dd4bdc5f21a",
       "name": "Merge"
     },
     {
       "parameters": {
-        "operation": "appendOrUpdate",
-        "documentId": {
-          "__rl": true,
-          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
-          "mode": "list",
-          "cachedResultName": "Reels Link",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "gid=0",
-          "mode": "list",
-          "cachedResultName": "Sheet1",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "matchingColumns": [],
-          "schema": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.6,
-      "position": [
-        2640,
-        140
-      ],
-      "id": "98a1d509-23f4-4197-ae98-aecb821ee539",
-      "name": "Google Sheets",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "LSSVDRUbucsyoRjk",
-          "name": "Google Sheets account"
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20,
+              "triggerAtMinute": 30
+            }
+          ]
         }
-      }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        330
+      ],
+      "id": "db450fa2-6188-49f2-81ad-8af008c80db6",
+      "name": "Schedule Trigger"
     },
     {
       "parameters": {
@@ -294,19 +93,332 @@
         },
         "filtersUI": {
           "values": [
-            {}
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Pending"
+            }
           ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -100,
+        330
+      ],
+      "id": "62911d99-e2d3-4608-bd99-8d6e3d689313",
+      "name": "Get Pending Reel",
+      "retryOnFail": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LSSVDRUbucsyoRjk",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resource": "workflow",
+        "operation": "dispatchAndWait",
+        "owner": {
+          "__rl": true,
+          "value": "ByteTrix",
+          "mode": "list",
+          "cachedResultName": "ByteTrix",
+          "cachedResultUrl": "https://github.com/ByteTrix"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "i2yt",
+          "mode": "list",
+          "cachedResultName": "i2yt",
+          "cachedResultUrl": "https://github.com/ByteTrix/i2yt"
+        },
+        "workflowId": {
+          "__rl": true,
+          "value": 167849066,
+          "mode": "list",
+          "cachedResultName": "Media Fetcher"
+        },
+        "ref": {
+          "__rl": true,
+          "value": "main",
+          "mode": "list",
+          "cachedResultName": "main"
+        },
+        "inputs": "={\n    \"url\": \"{{ $json.Link }}\"\n}\n"
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        120,
+        230
+      ],
+      "id": "06e43938-249e-41a2-a926-b479935db6f9",
+      "name": "Trigger Workflow",
+      "webhookId": "41678edf-06dd-4f2b-b411-cfb3d408d4df",
+      "credentials": {
+        "githubApi": {
+          "id": "dLPSz2KOLou6s3gw",
+          "name": "GitHub account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "close",
+        "taskId": "6XVcgGJJg5XJ2JcM"
+      },
+      "type": "n8n-nodes-base.todoistTool",
+      "typeVersion": 2.1,
+      "position": [
+        1120,
+        500
+      ],
+      "id": "dbd67bc9-d8f6-4c8f-89f7-d98150a3ac00",
+      "name": "Todoist",
+      "executeOnce": true,
+      "credentials": {
+        "todoistApi": {
+          "id": "DBXWuGnBW78gVYwj",
+          "name": "Todoist account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "media, description",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        340,
+        130
+      ],
+      "id": "efe10568-6527-4175-b18d-522227ca0c0c",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"title\": \"Your YouTube Short Title\",\n  \"description\": \"A brief, clean summary for the short.\",\n  \"tags\": \"ai, motivation, onepiece\"\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1240,
+        500
+      ],
+      "id": "2cd84558-d77e-472a-bb5d-0f112de7dc88",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "tnpasanga4@gmail.com",
+        "subject": "😫 Reels to Shorts Failed",
+        "emailType": "text",
+        "message": "Github Workflow Failed,\nCheck out if cookies expired or worflow got any errors.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        340,
+        330
+      ],
+      "id": "b86eb273-a83b-4987-8429-ee8ac8db0b3f",
+      "name": "Git Failed",
+      "webhookId": "0b2938c9-1243-407c-b848-251c831d96fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PCscvLMbTopXHFsN",
+          "name": "Google Dev Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "tnpasanga4@gmail.com",
+        "subject": "😫 Reels to Shorts Failed",
+        "emailType": "text",
+        "message": "=Hey!!.\nWTF is wrong with you,\ncan you just sit and run the scrapper and update links,\nEvery Links in sheets are posted, get links and update sheets.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        120,
+        430
+      ],
+      "id": "aa178b40-3d50-46fd-bdf5-1a951239a381",
+      "name": "Sheets Over",
+      "webhookId": "0b2938c9-1243-407c-b848-251c831d96fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PCscvLMbTopXHFsN",
+          "name": "Google Dev Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "tnpasanga4@gmail.com",
+        "subject": "😫 Reels to Shorts Failed",
+        "emailType": "text",
+        "message": "Workflow Failed, check out the n8n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        330
+      ],
+      "id": "9c1d07ba-ac76-4a7d-8ebe-7d20638b57bf",
+      "name": "Agent Failed",
+      "webhookId": "0b2938c9-1243-407c-b848-251c831d96fc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PCscvLMbTopXHFsN",
+          "name": "Google Dev Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
+          "mode": "list",
+          "cachedResultName": "Reels Link",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "YT Posted Date": "={{ $('Schedule Trigger').item.json['Readable date'] }}",
+            "Reel ID": "={{ $('Get Pending Reel').item.json['Reel ID'] }}",
+            "Status": "Posted",
+            "Shorts ID": "={{ $json.uploadId }}"
+          },
+          "matchingColumns": [
+            "Reel ID"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Insta Username",
+              "displayName": "Insta Username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link",
+              "displayName": "Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Reel ID",
+              "displayName": "Reel ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "YT Posted Date",
+              "displayName": "YT Posted Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Shorts ID",
+              "displayName": "Shorts ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.6,
       "position": [
-        -20,
-        140
+        1880,
+        30
       ],
-      "id": "62911d99-e2d3-4608-bd99-8d6e3d689313",
-      "name": "Google Sheets1",
+      "id": "98a1d509-23f4-4197-ae98-aecb821ee539",
+      "name": "Update Status",
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "LSSVDRUbucsyoRjk",
@@ -316,81 +428,114 @@
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "triggerAtHour": 20,
-              "triggerAtMinute": 30
-            }
-          ]
+        "operation": "toBinary",
+        "sourceProperty": "description",
+        "binaryPropertyName": "title",
+        "options": {
+          "fileName": "title"
         }
       },
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        280
+      ],
+      "id": "de28e8ec-7872-4269-b830-b1ded9ddb503",
+      "name": "Get Description"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "title",
+        "destinationKey": "title",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        780,
+        280
+      ],
+      "id": "b2bf15c1-a55d-40fa-b7ac-a4fef7f9c1e1",
+      "name": "Extract to txt"
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "media",
+        "options": {
+          "fileName": "reel.mp4",
+          "mimeType": "video/mp4"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1110,
+        -20
+      ],
+      "id": "2975f863-b9a7-4703-b87d-ca0f79ee7158",
+      "name": "Convert Reels to File"
+    },
+    {
+      "parameters": {
+        "operation": "sendAnimation",
+        "chatId": "1221092814",
+        "file": "https://media1.tenor.com/m/l54b4QxkuRUAAAAC/luffy-luffy-one-piece.gif",
+        "additionalFields": {
+          "caption": "=✨ *YT Shorts Uploaded Today* ✨\n🎬 *Title:* _{{ $('Merge').item.json.output.title }}_",
+          "parse_mode": "MarkdownV2"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -320,
-        140
+        2100,
+        30
       ],
-      "id": "db450fa2-6188-49f2-81ad-8af008c80db6",
-      "name": "Schedule Trigger"
+      "id": "2746aaf3-0d7f-4189-9ec3-b50291e76d4a",
+      "name": "Notify Results",
+      "webhookId": "9d09c5fe-aed9-418e-a3b5-c08586ae9b1c",
+      "credentials": {
+        "telegramApi": {
+          "id": "6Gw9EdlagtMpq610",
+          "name": "Shinzo AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $json.output.title }}",
+        "regionCode": "US",
+        "categoryId": "27",
+        "options": {
+          "defaultLanguage": "en",
+          "description": "={{ $json.output.description }}",
+          "notifySubscribers": true,
+          "privacyStatus": "public",
+          "tags": "={{ $json.output.tags }}"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        30
+      ],
+      "id": "7bd40af1-de6d-45e8-8211-a8410e40a5d6",
+      "name": "Upload Shorts",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "cNOlsCAZOX64Ryn7",
+          "name": "YouTube account"
+        }
+      }
     }
   ],
   "connections": {
-    "List Workflow Runs": {
-      "main": [
-        [
-          {
-            "node": "Get Artifacts",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Artifacts": {
-      "main": [
-        [
-          {
-            "node": "Get Artifact ZIP Link",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Artifact ZIP Link": {
-      "main": [
-        [
-          {
-            "node": "Download ZIP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Download ZIP": {
-      "main": [
-        [
-          {
-            "node": "Compression",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Compression": {
-      "main": [
-        [
-          {
-            "node": "Extract from File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "AI Agent": {
       "main": [
         [
@@ -399,19 +544,10 @@
             "type": "main",
             "index": 1
           }
-        ]
-      ]
-    },
-    "Extract from File": {
-      "main": [
+        ],
         [
           {
-            "node": "AI Agent",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Merge",
+            "node": "Agent Failed",
             "type": "main",
             "index": 0
           }
@@ -433,23 +569,7 @@
       "main": [
         [
           {
-            "node": "YouTube",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Google Sheets",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Google Sheets1": {
-      "main": [
-        [
-          {
-            "node": "List Workflow Runs",
+            "node": "Upload Shorts",
             "type": "main",
             "index": 0
           }
@@ -460,7 +580,136 @@
       "main": [
         [
           {
-            "node": "Google Sheets1",
+            "node": "Get Pending Reel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Reel": {
+      "main": [
+        [
+          {
+            "node": "Trigger Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sheets Over",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Workflow": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Git Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todoist": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Convert Reels to File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status": {
+      "main": [
+        [
+          {
+            "node": "Notify Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Description": {
+      "main": [
+        [
+          {
+            "node": "Extract to txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract to txt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Reels to File": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Shorts": {
+      "main": [
+        [
+          {
+            "node": "Update Status",
             "type": "main",
             "index": 0
           }
