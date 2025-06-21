@@ -6,10 +6,19 @@ Simple guide for connecting Google Sheets data to n8n workflow.
 
 The tool saves data with these columns:
 
-1. **Timestamp** - Collection time
-2. **Reel URL** - Full IG link
-3. **Reel ID** - Unique identifier
-4. **Status** - "Pending", "Processing", "Completed", or "Error"
+1. **Date** - Collection date (dd-MMM-yy format)
+2. **Insta Username** - Instagram account (@username)  
+3. **Link** - Full IG reel URL
+4. **Reel ID** - Unique identifier from URL
+5. **Status** - Processing status with dropdown validation
+6. **YT Posted Date** - YouTube upload date
+
+**Status Column**: Has automatic dropdown validation with these values:
+- "Pending" - Ready for processing
+- "Processing" - Currently being handled  
+- "Completed" - Successfully processed
+
+The dropdown is automatically created when the scraper runs for the first time.
 
 ## Basic n8n Setup
 

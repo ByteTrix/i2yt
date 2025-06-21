@@ -8,10 +8,14 @@ on:
         required: true
         type: string
       account_type:
-        description: 'Account Type (primary/backup)'
+        description: 'Cookies Account Type (primary/backup)'
         required: false
         type: string
         default: 'primary'
+      resumeUrl:
+        description: 'Webhook URL to resume n8n'
+        required: true
+        type: string
 
 jobs:
   fetch:
@@ -20,6 +24,7 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -51,6 +56,7 @@ jobs:
           else
             echo "ffmpeg already installed"
           fi      
+
       - name: Write Cookies to File
         run: |
           if [ "${{ github.event.inputs.account_type }}" = "backup" ]; then
@@ -58,12 +64,13 @@ jobs:
           else
             echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
           fi
-      
+
       - name: Get Media Description
         run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" --get-description > description.txt
+
       - name: Get Media
         run: yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" -o "reel.mp4" --recode-video mp4
-        
+
       - name: Upload Media as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -72,3 +79,18 @@ jobs:
             reel.mp4
             description.txt
           retention-days: 1
+
+      - name: Send Media to n8n Webhook
+        run: |
+          base64 -w 0 reel.mp4 > reel.b64
+          base64 -w 0 description.txt > desc.b64
+          curl -X POST "${{ github.event.inputs.resumeUrl }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "status": "completed",
+            "message": "Media processing complete.",
+            "media": "$(cat reel.b64)",
+            "description": "$(cat desc.b64)"
+          }
+          EOF

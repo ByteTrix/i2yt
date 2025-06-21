@@ -16,11 +16,11 @@ def load_config():
         
         # Get Instagram URLs - support both single URL and list of URLs
         instagram_urls = getattr(config, 'INSTAGRAM_URLS', [config.INSTAGRAM_URL])
-        
         return Config(
             instagram_url=config.INSTAGRAM_URL,  # Kept for backwards compatibility
             instagram_urls=instagram_urls,
             target_links=getattr(config, 'TARGET_LINKS', 0),
+            days_limit=getattr(config, 'DAYS_LIMIT', 30),
             google_sheets_id=config.GOOGLE_SHEETS_ID,
             credentials_file=config.CREDENTIALS_FILE,
             max_scrolls=config.MAX_SCROLLS,

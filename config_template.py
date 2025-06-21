@@ -26,5 +26,4 @@ FAST_MODE = True  # Enable fast mode with image blocking for better performance
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 # Browser Configuration
-USE_EXISTING_BROWSER = True  # Try to connect to existing browser session
 BROWSER_DEBUG_PORT = 9222    # Port for remote debugging

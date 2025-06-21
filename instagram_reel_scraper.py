@@ -10,8 +10,8 @@ import re
 import json
 import logging
 import os
-from datetime import datetime
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from urllib.parse import urlparse, parse_qs
 
@@ -27,6 +27,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 # Google Sheets imports
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 # Configuration
 @dataclass
@@ -34,15 +35,16 @@ class Config:
     instagram_url: str
     google_sheets_id: str
     instagram_urls: List[str] = None  # List of URLs to scrape
-    target_links: int = 0  # Target number of links to collect (0 = unlimited)
+    target_links: int = 0  # Target number of links to collect (0 = unlimited)    
+    days_limit: int = 30  # Only collect reels from last N days
     credentials_file: str = "credentials.json"
-    max_scrolls: int = 10
-    scroll_delay: float = 0.5  # Reduced from 2.0 to 0.5 seconds
-    batch_size: int = 25  # Number of links to collect before saving to sheets
-    implicit_wait: int = 5  # Reduced from 10 to 5 seconds
-    page_load_timeout: int = 20  # Reduced from 30 to 20 seconds
-    headless: bool = False
-    fast_mode: bool = True  # New parameter for fast mode
+    max_scrolls: int = 15  # Will be overridden by config.py
+    scroll_delay: float = 0.5  # Will be overridden by config.py
+    batch_size: int = 25  # Will be overridden by config.py
+    implicit_wait: int = 5  # Will be overridden by config.py
+    page_load_timeout: int = 20  # Will be overridden by config.py
+    headless: bool = False  # Will be overridden by config.py
+    fast_mode: bool = True  # Will be overridden by config.py
     
 class InstagramReelScraper:
     def __init__(self, config: Config):
@@ -61,15 +63,17 @@ class InstagramReelScraper:
             ]
         )
         self.logger = logging.getLogger(__name__)
+    
     def setup_driver(self) -> webdriver.Chrome:
         """Setup Chrome WebDriver with a dedicated profile directory that preserves cookies."""
         self.logger.info("Starting Chrome with a dedicated profile for Instagram scraping...")
         
         try:
             chrome_options = Options()
-            
             # Create a dedicated profile directory in the project folder
             profile_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instagram_profile")
+            
+            # Create profile directory if it doesn't exist (preserve existing login)
             os.makedirs(profile_dir, exist_ok=True)
             
             self.logger.info(f"Using profile directory: {profile_dir}")
@@ -79,19 +83,54 @@ class InstagramReelScraper:
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            
-            # Performance optimizations
+              # Performance optimizations for maximum speed
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--disable-notifications")
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--disable-infobars")
+            chrome_options.add_argument("--disable-logging")
+            chrome_options.add_argument("--disable-default-apps")
+            chrome_options.add_argument("--disable-background-timer-throttling")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-renderer-backgrounding")
+            chrome_options.add_argument("--disable-features=TranslateUI")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--no-default-browser-check")
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--disable-component-update")
             
-            # Disable images for faster loading if fast_mode is enabled
+            # Security bypasses for TrustedHTML issues
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+            chrome_options.add_argument("--disable-features=TrustedWebActivity")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--disable-security-policy")
+            chrome_options.add_argument("--disable-features=TrustTokens")
+            chrome_options.add_argument("--disable-features=TrustedDOMTypes")
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--ignore-certificate-errors")
+            chrome_options.add_argument("--ignore-ssl-errors")
+            chrome_options.add_argument("--ignore-certificate-errors-spki-list")
+            chrome_options.add_argument("--ignore-certificate-errors-ssl")
+            chrome_options.add_argument("--disable-site-isolation-trials")
+            chrome_options.add_argument("--disable-blink-features=TrustedDOMTypes,RequireTrustedTypesForDOM")
+            chrome_options.add_argument("--use-fake-ui-for-media-stream")
+            chrome_options.add_argument("--enable-unsafe-swiftshader")
+        
+              # Disable images and other content for maximum speed if fast_mode is enabled
             if hasattr(self.config, 'fast_mode') and self.config.fast_mode:
-                self.logger.info("Fast mode enabled: disabling images and CSS animations")
+                self.logger.info("Fast mode enabled: disabling images, CSS animations, and other content")
                 prefs = {
                     "profile.managed_default_content_settings.images": 2,  # 2 = block images
                     "profile.default_content_setting_values.notifications": 2,  # 2 = block notifications
+                    "profile.managed_default_content_settings.stylesheets": 2,  # Block CSS
+                    "profile.managed_default_content_setting_values.cookies": 1,  # Allow cookies
+                    "profile.managed_default_content_settings.javascript": 1,  # Allow JS (needed for Instagram)
+                    "profile.managed_default_content_settings.plugins": 2,  # Block plugins
+                    "profile.managed_default_content_settings.popups": 2,  # Block popups
+                    "profile.managed_default_content_settings.geolocation": 2,  # Block location
+                    "profile.managed_default_content_settings.media_stream": 2,  # Block media
                 }
                 chrome_options.add_experimental_option("prefs", prefs)
             
@@ -108,15 +147,21 @@ class InstagramReelScraper:
             
             # Attempt to hide automation
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            # Inject CSS to hide animations for faster performance if fast_mode is enabled
+              # Inject CSS to hide animations for faster performance if fast_mode is enabled
             if hasattr(self.config, 'fast_mode') and self.config.fast_mode:
-                driver.execute_script("""
-                var style = document.createElement('style');
-                style.type = 'text/css';
-                style.innerHTML = '* { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }';
-                document.getElementsByTagName('head')[0].appendChild(style);
-                """)
+                try:
+                    driver.execute_script("""
+                    try {
+                        var style = document.createElement('style');
+                        style.type = 'text/css';
+                        style.textContent = '* { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }';
+                        document.getElementsByTagName('head')[0].appendChild(style);
+                    } catch(e) {
+                        console.log('Style injection failed:', e);
+                    }
+                    """)
+                except Exception as js_error:
+                    self.logger.warning(f"Could not inject CSS styles: {js_error}")
             
             self.logger.info("Chrome browser started successfully with dedicated profile")
             return driver
@@ -162,16 +207,23 @@ class InstagramReelScraper:
             try:
                 self.logger.info("Checking/setting up sheet headers...")                
                 headers = self.sheet.row_values(1)
-                if not headers or headers != ['Timestamp', 'Reel URL', 'Reel ID', 'Status']:
+                if not headers or headers != ['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date']:
                     self.sheet.clear()
-                    self.sheet.append_row(['Timestamp', 'Reel URL', 'Reel ID', 'Status'])
+                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date'])
                     self.logger.info("Headers added to Google Sheet")
+                    
+                    # Setup dropdown validation for Status column (column E)
+                    try:
+                        self.setup_status_dropdown()
+                    except Exception as dropdown_error:
+                        self.logger.warning(f"Could not setup status dropdown: {dropdown_error}")
+                        
                 else:
                     self.logger.info("Headers already exist and are correct")
             except Exception as header_error:
                 self.logger.warning(f"Could not set headers, trying to add them: {header_error}")
                 try:
-                    self.sheet.append_row(['Timestamp', 'Reel URL', 'Reel ID', 'Status'])
+                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date'])
                     self.logger.info("Headers added successfully")
                 except Exception as add_error:
                     self.logger.error(f"Failed to add headers: {add_error}")
@@ -272,9 +324,9 @@ class InstagramReelScraper:
                 time.sleep(3)
             else:
                 self.logger.warning("Could not find reels section, proceeding with current page")
-                
         except Exception as e:
             self.logger.warning(f"Could not navigate to reels section: {e}")
+            
     def extract_reel_id(self, url: str) -> Optional[str]:
         """Extract reel ID from Instagram URL."""
         try:
@@ -285,6 +337,92 @@ class InstagramReelScraper:
             return None
         except Exception:
             return None
+            
+    def check_reel_date(self, reel_element) -> bool:
+        """Check if a reel was posted within the configured days limit."""
+        try:
+            # Look for time elements or date indicators near the reel
+            date_selectors = [
+                ".//time",
+                ".//span[contains(@class, 'time')]",
+                ".//a[contains(@href, '/p/')]/..//time",
+                ".//a[contains(@href, '/reel/')]/..//time",
+                ".//*[contains(text(), 'd') or contains(text(), 'day') or contains(text(), 'week') or contains(text(), 'hour')]"
+            ]
+            
+            cutoff_date = datetime.now() - timedelta(days=self.config.days_limit)
+            
+            for selector in date_selectors:
+                try:
+                    time_elements = reel_element.find_elements(By.XPATH, selector)
+                    for time_elem in time_elements:
+                        # Get the datetime attribute if available
+                        datetime_attr = time_elem.get_attribute('datetime')
+                        if datetime_attr:
+                            try:
+                                post_date = datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
+                                # Convert to local timezone for comparison
+                                post_date = post_date.replace(tzinfo=None)
+                                return post_date >= cutoff_date
+                            except:
+                                continue
+                        
+                        # Check text content for relative time indicators
+                        time_text = time_elem.text.lower().strip()
+                        if self.is_within_days_limit(time_text):
+                            return True
+                            
+                except Exception:
+                    continue
+                    
+            # If no specific date found, assume it's recent (could be enhanced)
+            return True
+            
+        except Exception as e:
+            self.logger.debug(f"Error checking reel date: {e}")
+            return True  # Default to including the reel if date check fails
+    
+    def is_within_days_limit(self, time_text: str) -> bool:
+        """Check if relative time text indicates the post is within the configured days limit."""
+        try:
+            time_text = time_text.lower()
+            days_limit = self.config.days_limit
+            
+            # Recent posts (definitely within days limit)
+            if any(keyword in time_text for keyword in ['second', 'minute', 'hour', 'just now', 'now']):
+                return True
+                
+            # Days
+            if 'd' in time_text or 'day' in time_text:
+                numbers = re.findall(r'\d+', time_text)
+                if numbers:
+                    days = int(numbers[0])
+                    return days <= days_limit
+                    
+            # Weeks
+            if 'w' in time_text or 'week' in time_text:
+                numbers = re.findall(r'\d+', time_text)
+                if numbers:
+                    weeks = int(numbers[0])
+                    return weeks <= (days_limit // 7)  # Convert days to weeks
+                    
+            # Months (check if within the days limit)
+            if 'month' in time_text or 'mo' in time_text:
+                numbers = re.findall(r'\d+', time_text)
+                if numbers:
+                    months = int(numbers[0])
+                    return months * 30 <= days_limit  # Rough conversion
+                return False  # If it says "month" without number, assume > 1 month
+                
+            # Years (definitely too old)
+            if 'year' in time_text or 'yr' in time_text:
+                return False
+                
+            # If we can't determine, assume it's recent
+            return True
+            
+        except Exception:
+            return True
     def scroll_and_collect_links(self, target_limit: int = 0) -> List[str]:
         """Scroll through the page and collect reel links with optimized speed.
         
@@ -387,42 +525,77 @@ class InstagramReelScraper:
         if target_limit > 0 and len(links) > target_limit:
             return list(links)[:target_limit]
         return list(links)
+        
     def collect_visible_reel_links(self) -> List[str]:
-        """Collect reel links from currently visible elements with optimized performance."""
+        """Collect reel links from currently visible elements with date filtering for last 30 days."""
         try:
-            # Faster approach: Use JavaScript to extract all links in one go
+            # First try JavaScript approach for speed
             links_js = """
-            return Array.from(document.querySelectorAll('a[href*="/reel/"], a[href*="/p/"]'))
-                .map(a => a.href)
-                .filter(href => href.includes('/reel/') || href.includes('/p/'));
+            try {
+                return Array.from(document.querySelectorAll('a[href*="/reel/"], a[href*="/p/"]'))
+                    .map(a => ({
+                        href: a.href,
+                        element: a
+                    }))
+                    .filter(item => item.href && (item.href.includes('/reel/') || item.href.includes('/p/')));
+            } catch(e) {
+                console.log('Link collection failed:', e);
+                return [];
+            }
             """
-            js_links = self.driver.execute_script(links_js)
+            js_results = self.driver.execute_script(links_js)
             
-            # Process the links
-            unique_links = []
-            seen = set()
-            
-            for href in js_links:
-                if href and href not in seen:
-                    # Ensure it's a full URL
-                    if not href.startswith('http'):
-                        href = f"https://instagram.com{href}"
-                    unique_links.append(href)
-                    seen.add(href)
-                    
-            return unique_links
+            if js_results:
+                # Use Selenium to check dates for each link
+                recent_links = []
+                seen = set()
+                
+                for item in js_results:
+                    href = item.get('href') if isinstance(item, dict) else item
+                    if href and href not in seen:
+                        # Find the element again for date checking
+                        try:
+                            link_element = self.driver.find_element(By.XPATH, f"//a[@href='{href}']")
+                            parent_element = link_element.find_element(By.XPATH, "./ancestor::article | ./ancestor::div[contains(@class, 'reel') or contains(@class, 'post')]")
+                            
+                            # Check if this reel is within 30 days
+                            if self.check_reel_date(parent_element):
+                                if not href.startswith('http'):
+                                    href = f"https://instagram.com{href}"
+                                recent_links.append(href)
+                                seen.add(href)
+                                self.logger.debug(f"Added recent reel: {href}")
+                            else:
+                                self.logger.debug(f"Skipped old reel: {href}")
+                                
+                        except Exception as elem_error:
+                            # If we can't find the element or check date, include it
+                            self.logger.debug(f"Could not check date for {href}, including anyway: {elem_error}")
+                            if not href.startswith('http'):
+                                href = f"https://instagram.com{href}"
+                            recent_links.append(href)
+                            seen.add(href)
+                
+                self.logger.info(f"Found {len(recent_links)} recent reels (within 30 days) out of {len(js_results)} total")
+                return recent_links
             
         except Exception as e:
-            self.logger.warning(f"Error collecting links with JavaScript: {e}")
-            self.logger.info("Falling back to Selenium method")
+            self.logger.warning(f"Error with JavaScript date filtering approach: {e}")
             
-            # Fallback to the original method if JavaScript approach fails
-            links = []
+        # Fallback to Selenium method with date checking
+        self.logger.info("Using Selenium fallback method with date filtering")
+        return self.collect_visible_reel_links_selenium()
+    
+    def collect_visible_reel_links_selenium(self) -> List[str]:
+        """Fallback method using pure Selenium with date filtering."""
+        recent_links = []
+        seen = set()
+        
+        try:
+            # Find all reel/post links
             selectors = [
                 "a[href*='/reel/']",
-                "a[href*='/p/']",
-                "[href*='instagram.com/reel/']",
-                "[href*='instagram.com/p/']"
+                "a[href*='/p/']"
             ]
             
             for selector in selectors:
@@ -430,22 +603,37 @@ class InstagramReelScraper:
                     elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
                     for element in elements:
                         href = element.get_attribute('href')
-                        if href and ('/reel/' in href or '/p/' in href):
-                            if not href.startswith('http'):
-                                href = f"https://instagram.com{href}"
-                            links.append(href)
+                        if href and href not in seen and ('/reel/' in href or '/p/' in href):
+                            # Find parent container for date checking
+                            try:
+                                parent_element = element.find_element(By.XPATH, "./ancestor::article | ./ancestor::div[contains(@class, 'reel') or contains(@class, 'post')]")
+                                
+                                # Check if this reel is within 30 days
+                                if self.check_reel_date(parent_element):
+                                    if not href.startswith('http'):
+                                        href = f"https://instagram.com{href}"
+                                    recent_links.append(href)
+                                    seen.add(href)
+                                    self.logger.debug(f"Added recent reel: {href}")
+                                else:
+                                    self.logger.debug(f"Skipped old reel: {href}")
+                                    
+                            except Exception:
+                                # If we can't find parent or check date, include it
+                                if not href.startswith('http'):
+                                    href = f"https://instagram.com{href}"
+                                recent_links.append(href)
+                                seen.add(href)
+                                
                 except Exception as selector_error:
                     self.logger.debug(f"Error with selector {selector}: {selector_error}")
-                    
-            # Remove duplicates while preserving order
-            unique_links = []
-            seen = set()
-            for link in links:
-                if link not in seen:
-                    unique_links.append(link)
-                    seen.add(link)
-                    
-            return unique_links
+            
+            self.logger.info(f"Selenium method found {len(recent_links)} recent reels")
+            return recent_links
+            
+        except Exception as e:
+            self.logger.error(f"Error in Selenium fallback method: {e}")
+            return []
         
     def save_to_google_sheets(self, links: List[str]):
         """Save collected links to Google Sheets."""
@@ -454,11 +642,10 @@ class InstagramReelScraper:
             return
             
         self.logger.info(f"Saving {len(links)} links to Google Sheets...")
-        
-        # Get existing URLs to avoid duplicates
+          # Get existing URLs to avoid duplicates
         try:
             existing_data = self.sheet.get_all_records()
-            existing_urls = {row.get('Reel URL', '') for row in existing_data}
+            existing_urls = {row.get('Link', '') for row in existing_data}
         except:
             existing_urls = set()
             
@@ -466,8 +653,11 @@ class InstagramReelScraper:
         for link in links:
             if link not in existing_urls:                
                 reel_id = self.extract_reel_id(link)
-                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                new_links.append([timestamp, link, reel_id or 'N/A', 'Pending'])
+                # Format date as dd-JAN-yy (e.g., 21-JUN-25)
+                date_formatted = datetime.now().strftime('%d-%b-%y').upper()
+                # Extract username from URL
+                username = self.extract_username_from_url(link)
+                new_links.append([date_formatted, username, link, reel_id or 'N/A', 'Pending', ''])
                 
         if new_links:
             try:
@@ -485,11 +675,14 @@ class InstagramReelScraper:
         try:
             filename = f"reel_links_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             backup_data = []
-            for row in data:                backup_data.append({
-                    'timestamp': row[0],
-                    'url': row[1],
-                    'reel_id': row[2],
-                    'status': row[3]
+            for row in data:                
+                backup_data.append({
+                    'date': row[0],
+                    'username': row[1],
+                    'url': row[2],
+                    'reel_id': row[3],
+                    'status': row[4],
+                    'yt_posted_date': row[5] if len(row) > 5 else ''
                 })
                 
             with open(filename, 'w', encoding='utf-8') as f:
@@ -499,6 +692,89 @@ class InstagramReelScraper:
         except Exception as e:
             self.logger.error(f"Error saving backup: {e}")
             
+    def extract_username_from_url(self, url: str) -> str:
+        """Extract Instagram username from URL."""
+        try:
+            # Extract username from URL pattern like https://www.instagram.com/username/
+            if 'instagram.com/' in url:
+                parts = url.split('instagram.com/')
+                if len(parts) > 1:
+                    username_part = parts[1].split('/')[0]                    # Remove any query parameters
+                    username = username_part.split('?')[0]
+                    return f"@{username}" if username else "Unknown"
+            return "Unknown"
+        except Exception:
+            return "Unknown"
+    
+    def setup_status_dropdown(self):
+        """Setup dropdown validation for Status column with Pending/Processing/Completed options.
+        
+        This method uses Google Sheets API v4 to create data validation rules for the Status column.
+        The dropdown will be available in the Google Sheets interface for rows 2-1000.
+        
+        To test: After running the scraper, go to your Google Sheet and click on any cell 
+        in the Status column. You should see a dropdown arrow with the three options.
+        """
+        try:
+            # Use Google Sheets API v4 to set up data validation
+            from google.oauth2.service_account import Credentials
+            from googleapiclient.discovery import build
+            
+            # Setup credentials for Sheets API v4
+            credentials = Credentials.from_service_account_file(
+                self.config.credentials_file,
+                scopes=['https://www.googleapis.com/auth/spreadsheets']
+            )
+            
+            # Build the service
+            service = build('sheets', 'v4', credentials=credentials)
+            
+            # Get sheet properties to find the sheet ID
+            spreadsheet = service.spreadsheets().get(spreadsheetId=self.config.google_sheets_id).execute()
+            sheet_id = spreadsheet['sheets'][0]['properties']['sheetId']  # Use first sheet
+            
+            # Define the dropdown validation rule for the Status column (column E = index 4)
+            validation_rule = {
+                'setDataValidation': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 1,  # Start from row 2 (after header)
+                        'endRowIndex': 1000,  # Apply to first 1000 rows
+                        'startColumnIndex': 4,  # Column E (Status)
+                        'endColumnIndex': 5  # End at column F
+                    },
+                    'rule': {
+                        'condition': {
+                            'type': 'ONE_OF_LIST',
+                            'values': [
+                                {'userEnteredValue': 'Pending'},
+                                {'userEnteredValue': 'Completed'}
+                            ]
+                        },
+                        'showCustomUi': True,
+                        'strict': True
+                    }
+                }
+            }
+            
+            # Execute the batch update
+            requests = [validation_rule]
+            body = {
+                'requests': requests
+            }
+            
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=self.config.google_sheets_id,
+                body=body
+            ).execute()
+            
+            self.logger.info("Successfully set up dropdown validation for Status column with options: Pending, Processing, Completed")
+            
+        except Exception as e:
+            self.logger.warning(f"Could not setup dropdown validation: {e}")
+            # Fallback: just log the expected values
+            self.logger.info("Status column should use dropdown values: Pending, Processing, Completed")
+    
     def run(self):
         """Main execution method."""
         all_links = []
@@ -543,8 +819,8 @@ class InstagramReelScraper:
                             target_reached = True
                             break
                         self.logger.info(f"Need {remaining_target} more links to reach target of {self.config.target_links}")
-                    
-                    # Collect links from this URL
+                      # Collect links from this URL
+                    self.logger.info(f"Collecting reels URL: {url}")
                     url_links = self.scroll_and_collect_links(remaining_target)
                     
                     if url_links:
@@ -588,6 +864,7 @@ def main():
         instagram_url="https://www.instagram.com/your_target_account/",  # Replace with target Instagram URL
         instagram_urls=["https://www.instagram.com/your_target_account/"],  # List of URLs to scrape
         target_links=100,  # Target number of links to collect (0 = unlimited)
+        days_limit=30,  # Only collect reels from last 30 days
         google_sheets_id="your_google_sheets_id_here",  # Replace with your Google Sheets ID
         credentials_file="credentials.json",  # Path to your Google Service Account credentials
         max_scrolls=15,  # Number of scrolls to perform

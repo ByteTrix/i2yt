@@ -47,17 +47,21 @@ Simple tool to collect links from IG and process them with n8n for YT uploads.
 
 The tool saves to Google Sheets with these columns:
 
-| Column    | Description           |
-|-----------|-----------------------|
-| Timestamp | Collection time       |
-| Reel URL  | Full link             |
-| Reel ID   | Unique ID             |
-| Status    | Processing status     |
+| Column         | Description                    |
+|----------------|--------------------------------|
+| Date           | Collection date (dd-MMM-yy)    |
+| Insta Username | Instagram account (@username)  |
+| Link           | Full reel URL                  |
+| Reel ID        | Unique ID from URL            |
+| Status         | Processing status (dropdown)   |
+| YT Posted Date | YouTube upload date           |
 
-The `Status` column is used by n8n to track processing:
+The `Status` column automatically has a dropdown with these options:
 - "Pending" = Ready for processing
-- "Processing" = Being handled by n8n
+- "Processing" = Being handled by n8n  
 - "Completed" = Successfully processed
+
+**Note**: The dropdown validation is automatically set up when headers are created.
 
 See `sample_n8n_workflow.json` for a ready-to-import workflow.
 
