@@ -55,10 +55,10 @@ The tool saves to Google Sheets with these columns:
 | Reel ID        | Unique ID from URL            |
 | Status         | Processing status (dropdown)   |
 | YT Posted Date | YouTube upload date           |
+| Shorts ID      | Youtube Shorts Id             |
 
 The `Status` column automatically has a dropdown with these options:
 - "Pending" = Ready for processing
-- "Processing" = Being handled by n8n  
 - "Completed" = Successfully processed
 
 **Note**: The dropdown validation is automatically set up when headers are created.

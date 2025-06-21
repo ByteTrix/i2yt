@@ -12,6 +12,7 @@ The tool saves data with these columns:
 4. **Reel ID** - Unique identifier from URL
 5. **Status** - Processing status with dropdown validation
 6. **YT Posted Date** - YouTube upload date
+7. **YT Shorts ID** - YouTube Shorts ID
 
 **Status Column**: Has automatic dropdown validation with these values:
 - "Pending" - Ready for processing

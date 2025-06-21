@@ -207,9 +207,9 @@ class InstagramReelScraper:
             try:
                 self.logger.info("Checking/setting up sheet headers...")                
                 headers = self.sheet.row_values(1)
-                if not headers or headers != ['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date']:
+                if not headers or headers != ['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date','Shorts ID']:
                     self.sheet.clear()
-                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date'])
+                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date','Shorts ID'])
                     self.logger.info("Headers added to Google Sheet")
                     
                     # Setup dropdown validation for Status column (column E)
@@ -223,7 +223,7 @@ class InstagramReelScraper:
             except Exception as header_error:
                 self.logger.warning(f"Could not set headers, trying to add them: {header_error}")
                 try:
-                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date'])
+                    self.sheet.append_row(['Date', 'Insta Username', 'Link', 'Reel ID', 'Status', 'YT Posted Date','Shorts ID'])
                     self.logger.info("Headers added successfully")
                 except Exception as add_error:
                     self.logger.error(f"Failed to add headers: {add_error}")
