@@ -6,6 +6,7 @@ A comprehensive automation tool that scrapes Instagram reels from multiple accou
 
 - **Multi-Account Support**: Scrape reels from multiple Instagram accounts simultaneously
 - **Smart Date Filtering**: Filter reels by last N days with configurable date ranges
+- **Smart Duplicate Check**: Reel id in sheets will be cross checked before adding new links
 - **Google Sheets Integration**: Automatic data storage with dropdown validation and proper formatting
 - **Fast Mode**: Headless browser operation for efficient scraping
 - **Batch Processing**: Process multiple URLs with optimized performance

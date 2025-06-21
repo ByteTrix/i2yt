@@ -52,6 +52,8 @@ class InstagramReelScraper:
         self.driver = None
         self.sheet = None
         self.collected_links = set()
+        self.existing_reel_ids = set()  # Cache for existing reel IDs
+        self.reel_id_cache_loaded = False  # Track if cache is loaded
           # Setup logging with UTF-8 encoding support
         import sys
         
@@ -242,6 +244,9 @@ class InstagramReelScraper:
                     self.logger.error(f"Failed to add headers: {add_error}")
                 
             self.logger.info("Google Sheets connection established successfully")
+            
+            # Load existing reel IDs for fast duplicate checking
+            self.load_existing_reel_ids()
             
         except FileNotFoundError as e:
             self.logger.error(f"Credentials file error: {e}")
@@ -646,42 +651,44 @@ class InstagramReelScraper:
             
         except Exception as e:
             self.logger.error(f"Error in Selenium fallback method: {e}")
-            return []
-        
+            return []        
     def save_to_google_sheets(self, links: List[str]):
         """Save collected links to Google Sheets."""
         if not self.sheet:
             self.logger.error("Google Sheets not initialized")
-            return
-            
-        self.logger.info(f"Saving {len(links)} links to Google Sheets...")
-          # Get existing URLs to avoid duplicates
-        try:
-            existing_data = self.sheet.get_all_records()
-            existing_urls = {row.get('Link', '') for row in existing_data}
-        except:
-            existing_urls = set()
-            
+            return        
+        self.logger.info(f"Checking {len(links)} links for duplicates...")
+        
+        # Fast batch duplicate filtering
+        filtered_links, duplicate_count = self.filter_duplicate_reels(links)
+        
+        if duplicate_count > 0:
+            self.logger.info(f"Found {duplicate_count} duplicate reels, processing {len(filtered_links)} new reels")
+        
+        # Process only new links
         new_links = []
-        for link in links:
-            if link not in existing_urls:                
-                reel_id = self.extract_reel_id(link)
-                # Format date as dd-JAN-yy (e.g., 21-JUN-25)
-                date_formatted = datetime.now().strftime('%d-%b-%y').upper()
-                # Extract username from URL
-                username = self.extract_username_from_url(link)
-                new_links.append([date_formatted, username, link, reel_id or 'N/A', 'Pending', ''])
+        for link in filtered_links:
+            reel_id = self.extract_reel_id(link)            # Format date as dd-JAN-yy (e.g., 21-JUN-25)
+            date_formatted = datetime.now().strftime('%d-%b-%y').upper()
+            # Extract username from URL
+            username = self.extract_username_from_url(link)
+            new_links.append([date_formatted, username, link, reel_id or 'N/A', 'Pending', '', ''])
                 
         if new_links:
             try:
                 self.sheet.append_rows(new_links)
                 self.logger.info(f"Successfully saved {len(new_links)} new links to Google Sheets")
+                if duplicate_count > 0:
+                    self.logger.info(f"Skipped {duplicate_count} duplicate reels (already in sheet)")
             except Exception as e:
                 self.logger.error(f"Error saving to Google Sheets: {e}")
                 # Save to local file as backup
                 self.save_to_local_backup(new_links)
         else:
-            self.logger.info("No new links to save (all were duplicates)")
+            if duplicate_count > 0:
+                self.logger.info(f"No new links to save - all {duplicate_count} reels were duplicates")
+            else:
+                self.logger.info("No new links to save")
             
     def save_to_local_backup(self, data: List[List[str]]):
         """Save data to local JSON file as backup."""
@@ -788,6 +795,86 @@ class InstagramReelScraper:
             # Fallback: just log the expected values
             self.logger.info("Status column should use dropdown values: Pending, Processing, Completed")
     
+    def load_existing_reel_ids(self):
+        """Load existing reel IDs from Google Sheets for fast duplicate checking."""
+        if self.reel_id_cache_loaded or not self.sheet:
+            return
+            
+        try:
+            self.logger.info("Loading existing reel IDs for duplicate checking...")
+            
+            # Get only the Reel ID column (column D) to minimize data transfer
+            reel_id_column = self.sheet.col_values(4)  # Column D (Reel ID)
+            
+            # Skip header row and add non-empty reel IDs to cache
+            for reel_id in reel_id_column[1:]:  # Skip header
+                if reel_id and reel_id != 'N/A':
+                    self.existing_reel_ids.add(reel_id)
+            
+            self.reel_id_cache_loaded = True
+            self.logger.info(f"Loaded {len(self.existing_reel_ids)} existing reel IDs for duplicate checking")
+            
+        except Exception as e:
+            self.logger.warning(f"Could not load existing reel IDs: {e}")
+            # Continue without cache - will still work but slower
+            self.reel_id_cache_loaded = False
+
+    def is_duplicate_reel(self, reel_id: str) -> bool:
+        """Fast check if a reel ID already exists in the sheet."""
+        if not reel_id or reel_id == 'N/A':
+            return False
+            
+        # Ensure cache is loaded
+        if not self.reel_id_cache_loaded:
+            self.load_existing_reel_ids()
+            
+        return reel_id in self.existing_reel_ids
+
+    def add_reel_to_cache(self, reel_id: str):
+        """Add a new reel ID to the cache when it's successfully saved."""
+        if reel_id and reel_id != 'N/A':
+            self.existing_reel_ids.add(reel_id)
+
+    def filter_duplicate_reels(self, links: List[str]) -> Tuple[List[str], int]:
+        """Filter out duplicate reels from a list of links. Returns (new_links, duplicate_count)."""
+        if not links:
+            return [], 0
+            
+        new_links = []
+        duplicate_count = 0
+        
+        # Ensure cache is loaded
+        if not self.reel_id_cache_loaded:
+            self.load_existing_reel_ids()
+        
+        for link in links:
+            reel_id = self.extract_reel_id(link)
+            
+            if reel_id and reel_id in self.existing_reel_ids:
+                duplicate_count += 1
+                self.logger.debug(f"Skipping duplicate reel: {reel_id}")
+            else:
+                new_links.append(link)
+                # Add to cache immediately to prevent duplicates within this batch
+                if reel_id and reel_id != 'N/A':
+                    self.existing_reel_ids.add(reel_id)
+        
+        return new_links, duplicate_count
+
+    def refresh_reel_id_cache(self):
+        """Refresh the reel ID cache from Google Sheets."""
+        self.existing_reel_ids.clear()
+        self.reel_id_cache_loaded = False
+        self.load_existing_reel_ids()
+        self.logger.info("Reel ID cache refreshed")
+
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Get statistics about the reel ID cache."""
+        return {
+            'cached_reel_ids': len(self.existing_reel_ids),
+            'cache_loaded': self.reel_id_cache_loaded
+        }
+
     def run(self):
         """Main execution method."""
         all_links = []
