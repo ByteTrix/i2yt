@@ -79,17 +79,17 @@
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
+          "value": "",
           "mode": "list",
           "cachedResultName": "Reels Link",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
           "cachedResultName": "Sheet1",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit#gid=0"
         },
         "filtersUI": {
           "values": [
@@ -219,7 +219,7 @@
     },
     {
       "parameters": {
-        "sendTo": "tnpasanga4@gmail.com",
+        "sendTo": "",
         "subject": "😫 Reels to Shorts Failed",
         "emailType": "text",
         "message": "Github Workflow Failed,\nCheck out if cookies expired or worflow got any errors.",
@@ -245,10 +245,10 @@
     },
     {
       "parameters": {
-        "sendTo": "tnpasanga4@gmail.com",
+        "sendTo": "",
         "subject": "😫 Reels to Shorts Failed",
         "emailType": "text",
-        "message": "=Hey!!.\nWTF is wrong with you,\ncan you just sit and run the scrapper and update links,\nEvery Links in sheets are posted, get links and update sheets.",
+        "message": "=Hey!!.\nWTF is wrong with you,\ncan't you just sit and run the scrapper and update links,\nEvery Links in sheets are posted, get links and update sheets.",
         "options": {
           "appendAttribution": false
         }
@@ -271,7 +271,7 @@
     },
     {
       "parameters": {
-        "sendTo": "tnpasanga4@gmail.com",
+        "sendTo": "",
         "subject": "😫 Reels to Shorts Failed",
         "emailType": "text",
         "message": "Workflow Failed, check out the n8n",
@@ -300,17 +300,17 @@
         "operation": "update",
         "documentId": {
           "__rl": true,
-          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
+          "value": "",
           "mode": "list",
           "cachedResultName": "Reels Link",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit?usp=drivesdk"
         },
         "sheetName": {
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
           "cachedResultName": "Sheet1",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
@@ -481,7 +481,7 @@
     {
       "parameters": {
         "operation": "sendAnimation",
-        "chatId": "1221092814",
+        "chatId": "1092814",
         "file": "https://media1.tenor.com/m/l54b4QxkuRUAAAAC/luffy-luffy-one-piece.gif",
         "additionalFields": {
           "caption": "=✨ *YT Shorts Uploaded Today* ✨\n🎬 *Title:* _{{ $('Merge').item.json.output.title }}_",
