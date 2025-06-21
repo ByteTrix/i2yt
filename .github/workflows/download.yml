@@ -72,19 +72,3 @@ jobs:
             reel.mp4
             description.txt
           retention-days: 1
-
-      - name: Trigger Processing Webhook
-        if: success()
-        run: |         
-         curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "repository": "${{ github.repository }}",
-              "workflow": "download.yml",
-              "run_id": "${{ github.run_id }}",
-              "status": "completed",
-              "artifact_name": "media",
-              "account_type": "${{ github.event.inputs.account_type }}",
-              "source_url": "${{ github.event.inputs.url }}",
-              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-            }'

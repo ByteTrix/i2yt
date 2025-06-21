@@ -1,0 +1,6 @@
+credentials.json
+config.py
+__pycache__
+chrome_profile
+instagram_profile
+instagram_scraper.log

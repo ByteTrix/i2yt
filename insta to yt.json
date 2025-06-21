@@ -16,7 +16,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        40,
+        480,
         140
       ],
       "id": "d8c11abc-a510-495a-891c-bb998a03a2c8",
@@ -44,7 +44,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        260,
+        700,
         140
       ],
       "id": "6fe7de3a-4e6c-485d-9f07-0ce5a7321fb9",
@@ -87,7 +87,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        460,
+        900,
         140
       ],
       "id": "04097ee3-18d0-433a-afb0-2eb37942c206",
@@ -120,7 +120,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        680,
+        1120,
         140
       ],
       "id": "aa0983fe-ce29-435c-8a1e-d0b484868989",
@@ -131,7 +131,7 @@
       "type": "n8n-nodes-base.compression",
       "typeVersion": 1.1,
       "position": [
-        900,
+        1340,
         140
       ],
       "id": "4733e57c-2772-4de4-a8c9-21b0ce06a14a",
@@ -153,7 +153,7 @@
       "type": "n8n-nodes-base.youTube",
       "typeVersion": 1,
       "position": [
-        2200,
+        2640,
         -60
       ],
       "id": "7bd40af1-de6d-45e8-8211-a8410e40a5d6",
@@ -176,7 +176,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2,
       "position": [
-        1480,
+        1920,
         340
       ],
       "id": "7418135b-6ad1-45d1-a4f4-b08a5c7e73fa",
@@ -193,7 +193,7 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        1120,
+        1560,
         140
       ],
       "id": "6810b296-8009-43bb-90f8-a260b68bb3ed",
@@ -207,8 +207,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1440,
-        720
+        1920,
+        600
       ],
       "id": "aaa095e1-1839-4185-8025-0968b53c0c03",
       "name": "Google Gemini Chat Model",
@@ -228,7 +228,7 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        1940,
+        2380,
         40
       ],
       "id": "5953acdc-cd8c-4548-ab03-0dd4bdc5f21a",
@@ -236,126 +236,103 @@
     },
     {
       "parameters": {
-        "path": "9737cee1-bd24-4beb-8b0d-a0779104a74b",
-        "options": {
-          "allowedOrigins": "*"
-        }
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        -220,
-        140
-      ],
-      "id": "ce03f4e4-eaf9-4a61-9fe4-64f210d35663",
-      "name": "Webhook",
-      "webhookId": "9737cee1-bd24-4beb-8b0d-a0779104a74b"
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
+        "operation": "appendOrUpdate",
+        "documentId": {
           "__rl": true,
-          "value": "appcsAZ5JDZr6RsP1",
-          "mode": "id"
+          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
+          "mode": "list",
+          "cachedResultName": "Reels Link",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
         },
-        "table": {
+        "sheetName": {
           "__rl": true,
-          "mode": "id",
-          "value": "tblmKFwvhnrcblUpD"
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
         },
         "columns": {
           "mappingMode": "defineBelow",
-          "value": {
-            "url": "={{ $('Webhook').item.json.source_url }}",
-            "account_type": "={{ $('Webhook').item.json.account_type || 'primary' }}",
-            "youtube_url": "={{ $json.html_url }}",
-            "status": "processed",
-            "date": "={{ new Date().toISOString() }}"
-          },
+          "value": {},
           "matchingColumns": [],
-          "schema": [
-            {
-              "id": "url",
-              "displayName": "url",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "date",
-              "displayName": "date",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "dateTime",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "account_type",
-              "displayName": "account_type",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "youtube_url",
-              "displayName": "youtube_url",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "string",
-              "readOnly": false,
-              "removed": false
-            },
-            {
-              "id": "status",
-              "displayName": "status",
-              "required": false,
-              "defaultMatch": false,
-              "canBeUsedToMatch": true,
-              "display": true,
-              "type": "options",
-              "options": [
-                {
-                  "name": "processed",
-                  "value": "processed"
-                }
-              ],
-              "readOnly": false,
-              "removed": false
-            }
-          ],
+          "schema": [],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
         "options": {}
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
       "position": [
-        2200,
-        180
+        2640,
+        140
       ],
-      "id": "b46e19a6-4d60-45ca-9dd5-dc808eb5e068",
-      "name": "Airtable - Track Processed1",
+      "id": "98a1d509-23f4-4197-ae98-aecb821ee539",
+      "name": "Google Sheets",
       "credentials": {
-        "airtableTokenApi": {
-          "id": "4bPpHpuS5pMDHJqC",
-          "name": "Airtable Personal Access Token account"
+        "googleSheetsOAuth2Api": {
+          "id": "LSSVDRUbucsyoRjk",
+          "name": "Google Sheets account"
         }
       }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U",
+          "mode": "list",
+          "cachedResultName": "Reels Link",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ymp8kAm8GFb4xS3V6cyVghs1lIrMcpMa0zY5E1oJW8U/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -20,
+        140
+      ],
+      "id": "62911d99-e2d3-4608-bd99-8d6e3d689313",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LSSVDRUbucsyoRjk",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        140
+      ],
+      "id": "db450fa2-6188-49f2-81ad-8af008c80db6",
+      "name": "Schedule Trigger"
     }
   ],
   "connections": {
@@ -461,18 +438,29 @@
             "index": 0
           },
           {
-            "node": "Airtable - Track Processed1",
+            "node": "Google Sheets",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Webhook": {
+    "Google Sheets1": {
       "main": [
         [
           {
             "node": "List Workflow Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets1",
             "type": "main",
             "index": 0
           }

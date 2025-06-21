@@ -1,121 +1,84 @@
-# Instagram to YouTube Automation Workflow
+# IG to YT
 
-This project automates the process of checking Instagram accounts for new reels, downloading them, and uploading to YouTube while tracking processed content in Airtable to avoid duplicates.
+Simple tool to collect links from IG and process them with n8n for YT uploads.
 
-## Workflow Overview
+## What it does
 
-### 1. Instagram Reel Checker (`check-instagram.yml`)
-- **Schedule**: Runs every 2 hours during active posting times (6 AM - 10 PM IST)
-- **Primary Account Check**: First checks your main Instagram account for recent reels
-- **Airtable Deduplication**: Verifies if the reel has already been processed
-- **Backup Account Fallback**: If no new content from primary account, checks backup account
-- **Automatic Trigger**: Triggers the download workflow when new content is found
+- Collects reel links from multiple IG accounts
+- Saves links to Google Sheets with metadata
+- Integrates with n8n workflow for automated processing
+- Supports target limits and batch processing
 
-### 2. Download Workflow (`download.yml`)
-- **Media Download**: Downloads the selected reel using yt-dlp
-- **Cookie Management**: Uses appropriate cookies based on account type (primary/backup)
-- **N8N Integration**: Triggers the n8n webhook with metadata for processing
+## Quick Setup
 
-### 3. N8N Processing (`updated-n8n-workflow.json`)
-- **Artifact Processing**: Downloads and extracts media from GitHub Actions
-- **AI Enhancement**: Uses Google Gemini to clean and improve video descriptions
-- **YouTube Upload**: Uploads processed video to YouTube
-- **Airtable Tracking**: Records processed URLs to prevent duplicates
+1. Install requirements:
+   ```
+   pip install -r requirements.txt
+   ```
 
-## Setup Instructions
+2. Set up Chrome profile:
+   ```
+   login_to_instagram.bat
+   ```
+   Log in to IG, then close the window to save your session.
 
-### GitHub Secrets Required
+3. Configure `config.py`:
+   ```python
+   # IG URLs to scrape
+   INSTAGRAM_URLS = [
+       "https://www.instagram.com/account1/",
+       "https://www.instagram.com/account2/"
+   ]
 
-```bash
-# Instagram Account Credentials
-INSTA_COOKIES              # Cookies for primary Instagram account
-BACKUP_INSTA_COOKIES       # Cookies for backup Instagram account
-PRIMARY_INSTA_USERNAME     # Username of primary account
-BACKUP_INSTA_USERNAME      # Username of backup account
+   # Collection settings
+   TARGET_LINKS = 100  # 0 = unlimited
+   
+   # Google Sheets settings
+   GOOGLE_SHEETS_ID = "your_sheet_id_here"
+   CREDENTIALS_FILE = "credentials.json"
+   ```
 
-# Airtable Configuration
-AIRTABLE_TOKEN            # Personal Access Token from Airtable
-AIRTABLE_BASE_ID          # Base ID of your Airtable workspace
-AIRTABLE_TABLE_ID         # Table ID where processed URLs are tracked
+4. Run the tool:
+   ```
+   python run_scraper.py
+   ```
 
-# N8N Integration
-N8N_WEBHOOK_URL          # Your n8n webhook URL
-```
+## n8n Integration
 
-### Airtable Setup
+The tool saves to Google Sheets with these columns:
 
-Create a table with the following columns:
-- `url` (Single line text) - Instagram reel URL
-- `Date` (Date) - Processing timestamp
-- `account_type` (Single select: primary/backup) - Source account
-- `youtube_url` (URL) - YouTube video URL after upload
-- `status` (Single select: processed/failed) - Processing status
+| Column    | Description           |
+|-----------|-----------------------|
+| Timestamp | Collection time       |
+| Reel URL  | Full link             |
+| Reel ID   | Unique ID             |
+| Status    | Processing status     |
 
-### N8N Workflow Setup
+The `Status` column is used by n8n to track processing:
+- "Pending" = Ready for processing
+- "Processing" = Being handled by n8n
+- "Completed" = Successfully processed
 
-1. Import the `updated-n8n-workflow.json` into your n8n instance
-2. Configure the following credentials:
-   - GitHub API access
-   - YouTube OAuth2 API
-   - Google Gemini API
-   - Airtable Personal Access Token
-3. Update the webhook URL in your GitHub secrets
+See `sample_n8n_workflow.json` for a ready-to-import workflow.
 
-## How It Works
+## Options
 
-### Automatic Detection Flow
+- Set `HEADLESS = True` to run without browser window
+- Set `FAST_MODE = True` to speed up collection (blocks images)
+- Set `BATCH_SIZE = 25` to save every 25 new links
+- Set `MAX_SCROLLS = 15` to limit scrolling per account
 
-1. **Scheduled Check**: Every 2 hours, the checker workflow runs
-2. **Primary Account**: Checks your main Instagram account for reels posted in the last 24 hours
-3. **Duplicate Check**: Queries Airtable to see if the reel URL has been processed
-4. **Backup Account**: If no new content from primary, checks backup account
-5. **Trigger Download**: If new content found, triggers download workflow with appropriate cookies
+## Workflow Integration
 
-### Processing Flow
+This tool is designed to work with n8n for end-to-end automation:
 
-1. **Download**: Downloads the selected reel and description
-2. **Webhook Trigger**: Sends metadata to n8n including source URL and account type
-3. **N8N Processing**:
-   - Downloads artifacts from GitHub Actions
-   - Extracts video and description files
-   - Uses AI to clean up the description
-   - Uploads to YouTube
-   - Records the processed URL in Airtable
+1. This tool collects links from IG
+2. Google Sheets stores the links
+3. n8n monitors for new links
+4. n8n downloads content and uploads to YT
+5. n8n updates status in Google Sheets
 
-### Manual Triggers
-
-You can manually trigger workflows:
-
-```bash
-# Force check both accounts regardless of recent activity
-gh workflow run check-instagram.yml -f force_check=true
-
-# Manually download a specific reel
-gh workflow run download.yml -f url=https://www.instagram.com/reel/xxxxx -f account_type=primary
-```
-
-## File Structure
-
-```
-.github/workflows/
-├── check-instagram.yml    # Main checker workflow
-└── download.yml          # Download and processing workflow
-
-├── insta to yt.json      # Original n8n workflow
-├── updated-n8n-workflow.json  # Enhanced n8n workflow
-└── README.md            # This documentation
-```
-
-## Features
-
-✅ **Automatic Discovery**: Finds new reels without manual intervention  
-✅ **Duplicate Prevention**: Tracks processed content in Airtable  
-✅ **Multi-Account Support**: Primary and backup Instagram accounts  
-✅ **Smart Scheduling**: Runs during active posting hours  
-✅ **Cookie Management**: Handles different accounts automatically  
-✅ **AI Enhancement**: Improves video descriptions for YouTube  
-✅ **Error Handling**: Robust error handling and logging  
-✅ **Manual Override**: Force check options for testing  
+For detailed n8n setup, see `google_sheets_n8n_integration.md`
 
 ## Monitoring
 
@@ -158,3 +121,65 @@ def is_recent_reel(upload_date, hours=48):  # 48 hours instead of 24
 
 ### Add More Accounts
 Extend the checker script to support additional backup accounts by adding more cookie files and account environment variables.
+
+# Instagram Reel Scraper
+
+This project automates scraping Instagram reel links and saves them to a Google Sheet.
+
+## How It Works
+
+The script uses Selenium to control Chrome, navigate to Instagram, scroll through the target page, and collect all reel links. It then saves these links to a specified Google Sheet, avoiding duplicates.
+
+## Setup Instructions
+
+### 1. Prerequisites
+- Python 3.x installed.
+- Google Chrome installed.
+- A Google Cloud project with the Google Sheets API and Google Drive API enabled.
+- A Google Service Account with credentials.
+
+### 2. Initial Setup
+1.  **Clone the repository or download the files.**
+2.  **Install Dependencies**: Open a terminal in the project directory and run:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Configure Google Credentials**:
+    - Place your Google Service Account `credentials.json` file in the root of the project directory.
+    - Open your Google Sheet and share it with the `client_email` found in your `credentials.json` file, giving it "Editor" permissions.
+4.  **Configure the Scraper**:
+    - Rename `config_template.py` to `config.py`.
+    - Open `config.py` and fill in the required values:
+        - `instagram_url`: The full URL of the Instagram profile or page you want to scrape.
+        - `google_sheets_id`: The ID of your Google Sheet (from its URL).
+
+### 3. Log in to Instagram
+
+The scraper uses a dedicated Chrome profile to store your Instagram login. To set this up:
+
+1. **Run the Login Helper**: 
+   - Run `login_to_instagram.bat` by double-clicking it.
+   - A Chrome window will open.
+   - Log in to your Instagram account.
+   - After logging in, you can close the browser.
+
+2. **Run the Scraper**:
+   - Now you can run the scraper:
+     ```bash
+     python run_scraper.py
+     ```
+   - The script will use the saved login session, navigate to the target account, and collect reel links.
+
+Your login session will be saved in the dedicated profile, so you only need to do this once. The scraper will use this profile automatically in future runs.
+
+## Files
+
+- `instagram_reel_scraper.py`: The main Python script for scraping.
+- `run_scraper.py`: A simple launcher for the main script.
+- `login_to_instagram.bat`: Helper script to log in to Instagram and save the session.
+- `config.py`: Your configuration file (you create this from the template).
+- `config_template.py`: A template for the configuration.
+- `requirements.txt`: A list of required Python packages.
+- `credentials.json`: Your Google Service Account credentials (you provide this).
+- `.gitignore`: Prevents sensitive files from being committed to Git.
+- `README.md`: This file.
