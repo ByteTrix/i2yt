@@ -1,6 +1,57 @@
+# Sensitive configuration and credentials
 credentials.json
 config.py
-__pycache__
-chrome_profile
-instagram_profile
-instagram_scraper.log
+
+# Cache and temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Browser profiles and cache
+chrome_profile/
+instagram_profile/
+chromedriver.log
+
+# Log files
+*.log
+logs/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.backup
+*.bak
+
+# Test and coverage files
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+
+# Distribution and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
