@@ -60,6 +60,12 @@
         "rule": {
           "interval": [
             {
+              "triggerAtHour": 10
+            },
+            {
+              "triggerAtHour": 13
+            },
+            {
               "triggerAtHour": 20,
               "triggerAtMinute": 30
             }
@@ -248,7 +254,7 @@
         "sendTo": "",
         "subject": "😫 Reels to Shorts Failed",
         "emailType": "text",
-        "message": "=Hey!!.\nWTF is wrong with you,\ncan't you just sit and run the scrapper and update links,\nEvery Links in sheets are posted, get links and update sheets.",
+        "message": "=Hey!!.\nWTF is wrong with you,\ncan you just sit and run the scrapper and update links,\nEvery Links in sheets are posted, get links and update sheets.",
         "options": {
           "appendAttribution": false
         }
@@ -481,11 +487,11 @@
     {
       "parameters": {
         "operation": "sendAnimation",
-        "chatId": "1092814",
-        "file": "https://media1.tenor.com/m/l54b4QxkuRUAAAAC/luffy-luffy-one-piece.gif",
+        "chatId": "",
+        "file": "https://media1.tenor.com/m/VgdJp-JEgrQAAAAC/luffy-cute.gif",
         "additionalFields": {
           "caption": "=✨ *YT Shorts Uploaded Today* ✨\n🎬 *Title:* _{{ $('Merge').item.json.output.title }}_",
-          "parse_mode": "MarkdownV2"
+          "parse_mode": "Markdown"
         }
       },
       "type": "n8n-nodes-base.telegram",
@@ -533,6 +539,137 @@
           "name": "YouTube account"
         }
       }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "Reels Link",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d//edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "Pending"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -100,
+        790
+      ],
+      "id": "bbf68a80-4ff4-4f92-9b62-aaab8386523c",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LSSVDRUbucsyoRjk",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 21,
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -320,
+        790
+      ],
+      "id": "0016bdf3-3ad8-4cbd-8fa3-9fb5d9458a36",
+      "name": "Check Reels Count"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        340,
+        890
+      ],
+      "id": "0a5f62e4-e313-4a2d-bcc4-871f520473d9",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "operation": "sendAnimation",
+        "chatId": "",
+        "file": "https://media1.tenor.com/m/EqITRK_Zs8AAAAAd/luffy-bruh.gif",
+        "additionalFields": {
+          "caption": "=Hey Your Are Running Out of Reels Link in Google Sheets for YT Automation"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        340,
+        690
+      ],
+      "id": "882ea0fa-a51b-4cf0-b03b-ceaf5097f46c",
+      "name": "Reels Scraping Remainder",
+      "webhookId": "9d09c5fe-aed9-418e-a3b5-c08586ae9b1c",
+      "credentials": {
+        "telegramApi": {
+          "id": "6Gw9EdlagtMpq610",
+          "name": "Shinzo AI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0347f895-59bf-45d0-8ee5-a0b9353c78f5",
+              "leftValue": "={{$items().length}}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        120,
+        790
+      ],
+      "id": "f5c93219-518d-467b-9dd1-da0c6a49f447",
+      "name": "Check Less than 8",
+      "executeOnce": true
     }
   ],
   "connections": {
@@ -710,6 +847,46 @@
         [
           {
             "node": "Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Check Less than 8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reels Count": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Less than 8": {
+      "main": [
+        [
+          {
+            "node": "Reels Scraping Remainder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
             "type": "main",
             "index": 0
           }
