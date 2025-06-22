@@ -103,22 +103,20 @@ jobs:
           
           yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
             -o "reel.mp4" --recode-video mp4 \
-            --no-playlist --no-warnings
-
+            --no-playlist --no-warnings      
       - name: Send to n8n
         run: |
-          # Encode and send
-          base64 -w 0 reel.mp4 > reel.b64
-          base64 -w 0 description.txt > desc.b64
+          # Create JSON payload using files to avoid command line length limits
+          echo '{"status": "completed", "message": "Media processing complete.", "media": "' > payload.json
+          base64 -w 0 reel.mp4 >> payload.json
+          echo '", "description": "' >> payload.json
+          base64 -w 0 description.txt >> payload.json
+          echo '"}' >> payload.json
           
+          # Send using file instead of inline data
           curl -X POST "${{ github.event.inputs.resumeUrl }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "status": "completed",
-              "message": "Media processing complete.",
-              "media": "'$(cat reel.b64)'",
-              "description": "'$(cat desc.b64)'"
-            }'
+            -d @payload.json
 
       - name: Save Cache
         if: always()
