@@ -127,12 +127,23 @@ jobs:
           yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
             --get-description > description.txt
           
-          yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
-            -o "reel.mp4" --recode-video mp4 \
-            --format "best[ext=mp4]/best" \
-            --merge-output-format mp4 \
-            --no-multistreams \
-            --no-playlist --no-warnings
+          # Check if URL contains multiple items
+          if yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" --flat-playlist --dump-json | grep -q "\"_type\": \"playlist\""; then
+            echo "Detected playlist or multiple items - using playlist handling mode"
+            # Download only the first item in the playlist
+            yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
+              -o "reel.mp4" --recode-video mp4 \
+              --format "best[ext=mp4]/best" \
+              --merge-output-format mp4 \
+              --playlist-items 1 --no-warnings
+          else
+            # Standard single file download
+            yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
+              -o "reel.mp4" --recode-video mp4 \
+              --format "best[ext=mp4]/best" \
+              --merge-output-format mp4 \
+              --no-playlist --no-warnings
+          fi
             
       - name: Send to n8n
         run: |
