@@ -22,8 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v4      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -35,11 +34,11 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.local/bin
-            ~/.local/lib
             ~/.cache/yt-dlp-version
-          key: ${{ runner.os }}-media-tools-permanent-v2-${{ github.run_number }}
+            ~/.cache/ffmpeg-version
+          key: ${{ runner.os }}-media-tools-v3-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}-media-tools-permanent-v2-
+            ${{ runner.os }}-media-tools-v3-
             ${{ runner.os }}-media-tools-
 
       - name: Install & Cache yt-dlp
@@ -64,29 +63,57 @@ jobs:
           echo "📥 Installing yt-dlp $LATEST_VERSION"
           curl -sL "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp" -o ~/.local/bin/yt-dlp
           chmod +x ~/.local/bin/yt-dlp
-          echo "$LATEST_VERSION" > ~/.cache/yt-dlp-version
+          echo "$LATEST_VERSION" > ~/.cache/yt-dlp-version          
           echo "✅ yt-dlp $LATEST_VERSION installed"
-                
+
       - name: Install & Cache ffmpeg
         run: |
           # Add to PATH first
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           
-          # Check cache
-          if [ -f ~/.local/bin/ffmpeg ] && ~/.local/bin/ffmpeg -version &>/dev/null; then
-            echo "✅ ffmpeg (cached)"
-          else
-            # Install fresh
-            echo "📥 Installing ffmpeg (~2 min)"
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq ffmpeg
-            
-            # Cache binaries to user space
-            mkdir -p ~/.local/bin
-            cp /usr/bin/ffmpeg ~/.local/bin/
-            cp /usr/bin/ffprobe ~/.local/bin/
-            echo "✅ ffmpeg cached to ~/.local/bin"
+          # Get latest git master build date from main page
+          LATEST_FFMPEG_BUILD=$(curl -s "https://johnvansickle.com/ffmpeg/" | \
+            grep -o 'built on [0-9]\{8\}' | \
+            grep -o '[0-9]\{8\}' || echo "")
+          
+          # Use fallback if date detection fails
+          if [ -z "$LATEST_FFMPEG_BUILD" ]; then
+            LATEST_FFMPEG_BUILD="git-master"
           fi
+          
+          # Check if update needed
+          if [ -f ~/.local/bin/ffmpeg ] && [ -f ~/.cache/ffmpeg-version ]; then
+            CACHED_VERSION=$(cat ~/.cache/ffmpeg-version)
+            # Verify cached version works and is up to date
+            if ~/.local/bin/ffmpeg -version &>/dev/null && [ "$CACHED_VERSION" = "$LATEST_FFMPEG_BUILD" ]; then
+              echo "✅ ffmpeg $CACHED_VERSION (cached)"
+              exit 0
+            fi
+          fi
+            # Download git master static builds (most up-to-date)
+          echo "📥 Installing ffmpeg git master ($LATEST_FFMPEG_BUILD)"
+          mkdir -p ~/.local/bin ~/.cache
+          
+          # Try multiple possible URLs for ffmpeg download
+          FFMPEG_URLS=(
+            "https://johnvansickle.com/ffmpeg/builds/ffmpeg-git-amd64-static.tar.xz"
+          )
+          
+          for url in "${FFMPEG_URLS[@]}"; do
+            echo "Trying: $url"
+            if curl -sL "$url" | tar -xJ --strip-components=1 -C ~/.local/bin/ --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null; then
+              echo "✅ Successfully downloaded from: $url"
+              break
+            else
+              echo "❌ Failed: $url"
+            fi
+          done
+          
+          chmod +x ~/.local/bin/ffmpeg ~/.local/bin/ffprobe
+          
+          # Cache version info
+          echo "$LATEST_FFMPEG_BUILD" > ~/.cache/ffmpeg-version
+          echo "✅ ffmpeg git master $LATEST_FFMPEG_BUILD installed"
 
       - name: Process Media
         run: |
@@ -102,8 +129,9 @@ jobs:
             --get-description > description.txt
           
           yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
-            -o "reel.mp4" --recode-video mp4 \
-            --no-playlist --no-warnings      
+            -o "reel.mp4" --recode-video mp4 \            
+            --no-playlist --no-warnings
+            
       - name: Send to n8n
         run: |
           # Create JSON payload using files to avoid command line length limits
@@ -113,7 +141,7 @@ jobs:
           base64 -w 0 description.txt >> payload.json
           echo '"}' >> payload.json
           
-          # Send using file instead of inline data
+          # Send using file instead of inline data          
           curl -X POST "${{ github.event.inputs.resumeUrl }}" \
             -H "Content-Type: application/json" \
             -d @payload.json
@@ -125,6 +153,6 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.local/bin
-            ~/.local/lib
             ~/.cache/yt-dlp-version
-          key: ${{ runner.os }}-media-tools-permanent-v2-${{ github.run_number }}
+            ~/.cache/ffmpeg-version
+          key: ${{ runner.os }}-media-tools-v3-${{ github.run_number }}
