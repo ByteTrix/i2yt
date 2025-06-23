@@ -84,8 +84,7 @@ def check_requirements():
         return False
 
 def main():
-    """Main function to run the scraper with proper setup checks."""
-    # Setup UTF-8 encoding for Windows console
+    """Main function to run the scraper with proper setup checks."""    # Setup UTF-8 encoding for Windows console
     import sys
     try:
         if hasattr(sys.stdout, 'reconfigure'):
@@ -93,17 +92,20 @@ def main():
     except:
         pass  # Fallback for older Python versions
     
-    print("🤖 Instagram Reel Scraper")
-    print("=" * 50)
+    print("🤖 Instagram Reel Scraper - SPEED OPTIMIZED")
+    print("=" * 60)
     
     # Load configuration
     print("📝 Loading configuration...")
     config = load_config()
     print("✅ Configuration loaded successfully")
     
-    # Display configuration summary
-    print("\n📊 Scraper Configuration:")
+    # Display optimized configuration summary
+    print("\n📊 SPEED-OPTIMIZED Scraper Configuration:")
     print(f"  • URLs to scrape: {len(config.instagram_urls)}")
+    print(f"  • Days limit: {config.days_limit} days (faster = fewer days)")
+    print(f"  • Scroll delay: {config.scroll_delay}s (optimized for speed)")
+    print(f"  • Batch size: {config.batch_size} (larger = faster saves)")
     
     # Display target info if set
     if config.target_links > 0:
@@ -112,8 +114,10 @@ def main():
         print("  • No link limit (will collect all available)")
         
     print(f"  • Max scrolls per URL: {config.max_scrolls}")
-    print(f"  • Fast mode: {'Enabled' if config.fast_mode else 'Disabled'}")
-    print(f"  • Headless mode: {'Enabled' if config.headless else 'Disabled'}")
+    print(f"  • Ultra-fast mode: {'🚀 ENABLED' if config.fast_mode else '❌ DISABLED'}")
+    print(f"  • Headless mode: {'🚀 ENABLED' if config.headless else '👁️ VISIBLE'}")
+    print(f"  • Implicit wait: {config.implicit_wait}s (faster = lower)")
+    print(f"  • Page load timeout: {config.page_load_timeout}s (faster = lower)")
     
     # Check requirements
     print("\n🔍 Checking requirements...")

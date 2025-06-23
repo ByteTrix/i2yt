@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from urllib.parse import urlparse, parse_qs
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
 # Selenium imports
 from selenium import webdriver
@@ -97,12 +99,11 @@ class InstagramReelScraper:
             chrome_options.add_argument(f"--user-data-dir={profile_dir}")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-              # Performance optimizations for maximum speed
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")            # Performance optimizations for MAXIMUM SPEED
             chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-notifications")
+            chrome_options.add_argument("--disable-notifications") 
             chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--disable-infobars")
+            chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-logging")
             chrome_options.add_argument("--disable-default-apps")
             chrome_options.add_argument("--disable-background-timer-throttling")
@@ -113,41 +114,46 @@ class InstagramReelScraper:
             chrome_options.add_argument("--no-default-browser-check")
             chrome_options.add_argument("--no-first-run")
             chrome_options.add_argument("--disable-component-update")
+            chrome_options.add_argument("--disable-sync")
+            chrome_options.add_argument("--disable-background-networking")
+            chrome_options.add_argument("--disable-client-side-phishing-detection")
+            chrome_options.add_argument("--disable-hang-monitor")
+            chrome_options.add_argument("--disable-prompt-on-repost")
+            chrome_options.add_argument("--disable-domain-reliability")
+            chrome_options.add_argument("--disable-features=AudioServiceOutOfProcess")
+            chrome_options.add_argument("--aggressive-cache-discard")
+            chrome_options.add_argument("--memory-pressure-off")
+            chrome_options.add_argument("--max_old_space_size=4096")
             
-            # Security bypasses for TrustedHTML issues
-            chrome_options.add_argument("--disable-web-security")
+            # Ultra-fast loading optimizations
             chrome_options.add_argument("--disable-features=VizDisplayCompositor")
-            chrome_options.add_argument("--disable-features=TrustedWebActivity")
-            chrome_options.add_argument("--allow-running-insecure-content")
-            chrome_options.add_argument("--disable-security-policy")
-            chrome_options.add_argument("--disable-features=TrustTokens")
-            chrome_options.add_argument("--disable-features=TrustedDOMTypes")
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
-            chrome_options.add_argument("--ignore-certificate-errors")
-            chrome_options.add_argument("--ignore-ssl-errors")
-            chrome_options.add_argument("--ignore-certificate-errors-spki-list")
-            chrome_options.add_argument("--ignore-certificate-errors-ssl")
-            chrome_options.add_argument("--disable-site-isolation-trials")
-            chrome_options.add_argument("--disable-blink-features=TrustedDOMTypes,RequireTrustedTypesForDOM")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled,TrustedDOMTypes,RequireTrustedTypesForDOM")
             chrome_options.add_argument("--use-fake-ui-for-media-stream")
-            chrome_options.add_argument("--enable-unsafe-swiftshader")
-        
-              # Disable images and other content for maximum speed if fast_mode is enabled
+            chrome_options.add_argument("--enable-unsafe-swiftshader")            # Disable images, videos, and other heavy content for ULTRA-FAST mode
             if hasattr(self.config, 'fast_mode') and self.config.fast_mode:
-                self.logger.info("Fast mode enabled: disabling images, CSS animations, and other content")
+                self.logger.info("ULTRA-FAST mode enabled: blocking images, videos, CSS, fonts for maximum speed")
                 prefs = {
-                    "profile.managed_default_content_settings.images": 2,  # 2 = block images
-                    "profile.default_content_setting_values.notifications": 2,  # 2 = block notifications
-                    "profile.managed_default_content_settings.stylesheets": 2,  # Block CSS
-                    "profile.managed_default_content_setting_values.cookies": 1,  # Allow cookies
-                    "profile.managed_default_content_settings.javascript": 1,  # Allow JS (needed for Instagram)
+                    "profile.managed_default_content_settings.images": 2,  # Block images
+                    "profile.default_content_setting_values.notifications": 2,  # Block notifications
+                    "profile.managed_default_content_settings.stylesheets": 2,  # Block CSS (faster loading)
+                    "profile.managed_default_content_settings.fonts": 2,  # Block fonts
                     "profile.managed_default_content_settings.plugins": 2,  # Block plugins
                     "profile.managed_default_content_settings.popups": 2,  # Block popups
                     "profile.managed_default_content_settings.geolocation": 2,  # Block location
                     "profile.managed_default_content_settings.media_stream": 2,  # Block media
+                    "profile.managed_default_content_settings.midi_sysex": 2,  # Block MIDI
+                    "profile.managed_default_content_setting_values.cookies": 1,  # Allow cookies (required)
+                    "profile.managed_default_content_settings.javascript": 1,  # Allow JS (required for Instagram)
                 }
                 chrome_options.add_experimental_option("prefs", prefs)
+                
+                # Additional ultra-fast loading flags
+                chrome_options.add_argument("--disable-images")
+                chrome_options.add_argument("--disable-javascript-harmony-shipping")
+                chrome_options.add_argument("--disable-background-media-suspend")
+                chrome_options.add_argument("--disable-new-avatar-menu")
             
             # Set a realistic user agent
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -279,7 +285,7 @@ class InstagramReelScraper:
             self.handle_popups()
             
             # Reduced wait time
-            time.sleep(1)  # Reduced from 3 to 1 second
+            time.sleep(0.5)  # Reduced from 1 second for faster navigation
             
         except TimeoutException:
             self.logger.error(f"Timeout while loading {url}")
@@ -290,20 +296,19 @@ class InstagramReelScraper:
             
     def handle_popups(self):
         """Handle login popups, cookie banners, etc."""
-        try:
-            # Handle "Not Now" for notifications
+        try:            # Handle "Not Now" for notifications
             not_now_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Not Now')]")
             for button in not_now_buttons:
                 if button.is_displayed():
                     button.click()
-                    time.sleep(1)
+                    time.sleep(0.3)  # Faster popup handling
                     
             # Handle cookie banner
             accept_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Accept')]")
             for button in accept_buttons:
                 if button.is_displayed():
                     button.click()
-                    time.sleep(1)
+                    time.sleep(0.3)  # Faster popup handling
                     
         except Exception as e:
             self.logger.warning(f"Could not handle popups: {e}")
@@ -332,14 +337,14 @@ class InstagramReelScraper:
                             reels_link = element
                             break
                     if reels_link:
-                        break
+                        break                
                 except:
                     continue
                     
             if reels_link:
                 self.logger.info("Found reels section, clicking...")
                 self.driver.execute_script("arguments[0].click();", reels_link)
-                time.sleep(3)
+                time.sleep(1.5)  # Reduced from 3 seconds for faster navigation
             else:
                 self.logger.warning("Could not find reels section, proceeding with current page")
         except Exception as e:
@@ -472,27 +477,27 @@ class InstagramReelScraper:
         else:
             batch_size = 0
             
-        # Check if we've already reached the target
+        # Check if we've already reached the target        
         if target_limit > 0 and len(links) >= target_limit:
             self.logger.info(f"Already collected enough links ({len(links)}/{target_limit}) without scrolling")
             return list(links)[:target_limit]
             
         while scroll_count < self.config.max_scrolls:
-            # Determine scroll speed based on performance
+            # Ultra-fast scrolling for maximum speed
             current_delay = self.config.scroll_delay
-            if consecutive_no_new_links > 0:
-                # If we're not finding new links, slow down a bit
-                current_delay = min(2.0, current_delay * 1.5)
+            if consecutive_no_new_links > 2:
+                # If we're not finding new links, increase delay slightly
+                current_delay = min(1.0, current_delay * 1.2)
             
-            # Scroll down with dynamic scrolling
-            for i in range(1, 4):  # Do multiple small scrolls instead of one big one
-                scroll_height = last_height / 4 * i
+            # Fast scroll technique - fewer intermediate scrolls
+            for i in range(1, 3):  # Only 2 small scrolls instead of 3
+                scroll_height = last_height / 3 * i
                 self.driver.execute_script(f"window.scrollTo(0, {scroll_height});")
-                time.sleep(current_delay / 3)  # Distribute the delay across small scrolls
+                time.sleep(current_delay / 4)  # Even faster scroll distribution
             
-            # Final scroll to bottom
+            # Final scroll to bottom with aggressive caching
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(current_delay / 3)
+            time.sleep(current_delay / 4)  # Faster final scroll delay
             
             # Collect links
             current_links = self.collect_visible_reel_links()
@@ -883,17 +888,27 @@ class InstagramReelScraper:
         # Determine which URLs to scrape
         if self.config.instagram_urls and len(self.config.instagram_urls) > 0:
             urls_to_scrape = self.config.instagram_urls
-            self.logger.info(f"Using {len(urls_to_scrape)} URLs from instagram_urls list")
+            self.logger.info(f"Using {len(urls_to_scrape)} URLs from instagram_urls list")        
         else:
             urls_to_scrape = [self.config.instagram_url]
             self.logger.info("Using single URL from instagram_url")
             
         try:
-            self.logger.info("Starting Instagram Reel Scraper...")
+            self.logger.info("🚀 Starting SPEED-OPTIMIZED Instagram Reel Scraper...")
             
             # Setup common resources
             self.setup_google_sheets()
             self.driver = self.setup_driver()
+            
+            # Apply runtime browser optimizations
+            self.optimize_browser_performance()
+            
+            # Show performance stats
+            perf_stats = self.get_performance_stats()
+            self.logger.info(f"📊 Performance Settings: Fast Mode: {perf_stats['fast_mode_enabled']}, "
+                           f"Headless: {perf_stats['headless_mode']}, "
+                           f"Scroll Delay: {perf_stats['scroll_delay']}s, "
+                           f"Batch Size: {perf_stats['batch_size']}")
             
             # Track progress toward target
             target_reached = False
@@ -956,6 +971,112 @@ class InstagramReelScraper:
                 
         return all_links
                 
+    def process_links_parallel(self, links: List[str], max_workers: int = 4) -> List[str]:
+        """Process links in parallel for ultra-fast duplicate checking and validation.
+        
+        Args:
+            links: List of Instagram links to process
+            max_workers: Number of parallel workers (default: 4)
+            
+        Returns:
+            List of validated, non-duplicate links
+        """
+        if not links:
+            return []
+            
+        self.logger.info(f"Processing {len(links)} links in parallel with {max_workers} workers")
+        
+        def process_single_link(link: str) -> Optional[str]:
+            """Process a single link - extract reel ID and check for duplicates."""
+            try:
+                reel_id = self.extract_reel_id(link)
+                if reel_id and not self.is_duplicate_reel(reel_id):
+                    return link
+                return None
+            except Exception as e:
+                self.logger.debug(f"Error processing link {link}: {e}")
+                return None
+        
+        # Use ThreadPoolExecutor for parallel processing
+        valid_links = []
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all links for processing
+                future_to_link = {executor.submit(process_single_link, link): link for link in links}
+                
+                # Collect results
+                for future in future_to_link:
+                    result = future.result()
+                    if result:
+                        valid_links.append(result)
+                        
+        except Exception as e:
+            self.logger.warning(f"Parallel processing failed, falling back to sequential: {e}")
+            # Fallback to sequential processing
+            for link in links:
+                result = process_single_link(link)
+                if result:
+                    valid_links.append(result)
+        
+        self.logger.info(f"Parallel processing completed: {len(valid_links)} valid links from {len(links)} total")
+        return valid_links
+
+    def optimize_browser_performance(self):
+        """Apply runtime browser optimizations for ultra-fast performance."""
+        if not self.driver:
+            return
+            
+        try:
+            # Disable unnecessary browser features at runtime
+            self.driver.execute_script("""
+                // Disable smooth scrolling for faster page movement
+                document.documentElement.style.scrollBehavior = 'auto';
+                
+                // Disable animations and transitions globally
+                const style = document.createElement('style');
+                style.textContent = `
+                    *, *::before, *::after {
+                        animation-duration: 0.001s !important;
+                        animation-delay: 0.001s !important;
+                        transition-duration: 0.001s !important;
+                        transition-delay: 0.001s !important;
+                        scroll-behavior: auto !important;
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // Optimize page rendering
+                document.body.style.pointerEvents = 'none';
+                setTimeout(() => document.body.style.pointerEvents = 'auto', 100);
+            """)
+            
+            self.logger.info("Applied runtime browser performance optimizations")
+            
+        except Exception as e:
+            self.logger.debug(f"Could not apply runtime optimizations: {e}")
+
+    def get_performance_stats(self) -> Dict[str, any]:
+        """Get performance statistics for monitoring speed optimizations."""
+        cache_stats = self.get_cache_stats()
+        
+        # Browser memory usage (if available)
+        browser_memory = "N/A"
+        try:
+            if self.driver:
+                browser_memory = self.driver.execute_script("return performance.memory ? performance.memory.usedJSHeapSize : 'N/A'")
+        except:
+            pass
+            
+        return {
+            "cached_reel_ids": cache_stats['cached_reel_ids'],
+            "cache_loaded": cache_stats['cache_loaded'],
+            "browser_memory_mb": round(browser_memory / (1024*1024), 2) if isinstance(browser_memory, (int, float)) else browser_memory,
+            "fast_mode_enabled": getattr(self.config, 'fast_mode', False),
+            "headless_mode": getattr(self.config, 'headless', False),
+            "scroll_delay": getattr(self.config, 'scroll_delay', 0.5),
+            "batch_size": getattr(self.config, 'batch_size', 25),
+            "max_scrolls": getattr(self.config, 'max_scrolls', 15)
+        }
 def main():
     """Main function to run the scraper."""
     # Configuration - Update these values
