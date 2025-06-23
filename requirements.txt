@@ -1,18 +1,15 @@
 # Instagram Reel Scraper Dependencies
 
-# Web automation
-selenium==4.16.0
 
-# Google Sheets integration
-gspread==5.12.4
-google-auth==2.23.4
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
-google-api-python-client==2.108.0
+selenium
+gspread
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
 
 # Additional utilities
-requests==2.32.4
-beautifulsoup4==4.12.2
+requests
+beautifulsoup4
 
 # Development and debugging
-python-dotenv==1.0.0
+python-dotenv

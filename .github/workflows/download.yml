@@ -123,13 +123,15 @@ jobs:
           else
             echo "${{ secrets.INSTA_COOKIES }}" > cookies.txt
           fi
-          
           # Download with optimal settings
           yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
             --get-description > description.txt
           
           yt-dlp --cookies cookies.txt "${{ github.event.inputs.url }}" \
-            -o "reel.mp4" --recode-video mp4 \            
+            -o "reel.mp4" --recode-video mp4 \
+            --format "best[ext=mp4]/best" \
+            --merge-output-format mp4 \
+            --no-multistreams \
             --no-playlist --no-warnings
             
       - name: Send to n8n
