@@ -1,228 +1,152 @@
-# IG to YouTube Automation
+# 🚀 i2yt: Instagram to YouTube/Google Drive Automation
 
-A comprehensive automation tool that scrapes Instagram reels from multiple accounts, stores them in Google Sheets with proper data validation, and integrates seamlessly with n8n workflows for YouTube uploading and other processing tasks.
+**i2yt** is a powerful and highly customizable automation tool designed to streamline your content workflow. It scrapes Instagram Reels, intelligently organizes the data in Google Sheets, and can automatically upload the videos to Google Drive, preparing them for your YouTube channel or other content pipelines.
 
-## 🚀 Features
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-- **Multi-Account Support**: Scrape reels from multiple Instagram accounts simultaneously
-- **Smart Date Filtering**: Filter reels by last N days with configurable date ranges
-- **Smart Duplicate Check**: Reel id in sheets will be cross checked before adding new links
-- **Google Sheets Integration**: Automatic data storage with dropdown validation and proper formatting
-- **Fast Mode**: Headless browser operation for efficient scraping
-- **Batch Processing**: Process multiple URLs with optimized performance
-- **Robust Error Handling**: Comprehensive logging and error recovery
-- **n8n Ready**: Pre-built workflow for seamless automation
-- **Backup System**: Automatic local JSON backup for data safety
-- **Chrome Profile Support**: Persistent login sessions and user preferences
+---
 
-## 📋 Requirements
+## ✨ Features
 
-- **Python 3.8+**
-- **Chrome/Chromium browser** (latest version recommended)
-- **Google Sheets API credentials**
-- **Instagram account** (for authentication)
-- **Internet connection** (for scraping and API calls)
+*   **Multi-Account Scraping**: Effortlessly scrape Reels from multiple Instagram accounts.
+*   **Smart Data Management**: Automatically saves data to Google Sheets with duplicate checks and clean formatting.
+*   **Google Drive Integration**: Seamlessly upload Reels to a specified Google Drive folder.
+*   **Parallel Processing**: Leverages concurrent processing for faster scraping, description extraction, and uploads.
+*   **Highly Customizable**: Fine-tune the entire workflow through a simple `config.py` file.
+*   **Resilient & Robust**: Built-in error handling and retry mechanisms.
+*   **Workflow Automation Ready**: Designed to be integrated with tools like n8n or other automation platforms.
+*   **Headless Mode**: Run the scraper in the background for efficient server-based operation.
+*   **Detailed Logging**: Keep track of the entire process with comprehensive logs.
 
-## 🔧 Quick Setup
+---
 
-### 1. Install Dependencies
+## ⚙️ How It Works
+
+The automation process follows these steps:
+
+1.  **Scrape Reels**: The tool scrapes the latest Reels from the specified Instagram accounts.
+2.  **Populate Google Sheets**: New Reel URLs, along with metadata like username and Reel ID, are added to a Google Sheet. Duplicates are automatically skipped.
+3.  **Extract Descriptions**: (Optional) The description for each Reel is extracted and added to the sheet.
+4.  **Upload to Google Drive**: (Optional) The videos are downloaded and uploaded to your Google Drive.
+5.  **Update Status**: The status of each Reel is updated in the Google Sheet, giving you a clear overview of the workflow (`pending`, `processing`, `completed`, `failed`).
+
+---
+
+## 🏁 Getting Started
+
+### Prerequisites
+
+*   Python 3.8+
+*   Google Chrome or Chromium
+*   A Google Cloud project with the Google Sheets and Google Drive APIs enabled.
+*   An Instagram account (for authentication to extract descriptions).
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/i2yt.git
+cd i2yt
+```
+
+### 2. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Google Sheets API
-1. Follow the detailed guide in [`docs/google_sheets_setup.md`](docs/google_sheets_setup.md)
-2. Download your `credentials.json` file
-3. Place it in the project root directory
+### 3. Configure Google API Access
 
-### 3. Setup Configuration
+You'''ll need to set up a Google Service Account to allow the application to access your Google Sheet and Google Drive.
+
+1.  Follow the official Google Cloud documentation to create a service account and download the `credentials.json` file.
+    *   [Enable Google Sheets API](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
+    *   [Enable Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+2.  Place the `credentials.json` file in the root directory of the project.
+3.  Share your Google Sheet and Google Drive folder with the service account'''s email address.
+
+### 4. Create Your Configuration
+
+Copy the template to create your own configuration file:
+
 ```bash
 copy config_template.py config.py
 ```
-Edit `config.py` with your specific settings:
-- Instagram URLs to scrape
-- Google Sheets ID
-- Date filtering preferences
-- Chrome profile settings
 
-### 4. Initial Browser Setup
-Run the login helper to set up your Chrome profile:
-```bash
-login_to_instagram.bat
-```
-Log into Instagram manually and close the browser when done.
+Now, open `config.py` and customize it with your details:
+
+*   `INSTAGRAM_URLS`: A list of Instagram accounts to scrape.
+*   `GOOGLE_SHEETS_ID`: The ID of your Google Sheet (from its URL).
+*   `UPLOAD_TO_GOOGLE_DRIVE`: Set to `True` to enable uploads.
+*   `DRIVE_FOLDER_ID`: The ID of the Google Drive folder for uploads.
 
 ### 5. Run the Scraper
+
+Execute the main script to start the process:
+
 ```bash
 python run_scraper.py
 ```
-
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [**Quick Start Guide**](docs/quick_start.md) | Fast setup and basic usage |
-| [**Configuration Guide**](docs/configuration.md) | Detailed configuration options |
-| [**Google Sheets Setup**](docs/google_sheets_setup.md) | Complete API setup guide |
-| [**n8n Integration**](docs/n8n_integration.md) | Workflow automation setup |
-| [**Troubleshooting**](docs/troubleshooting.md) | Common issues and solutions |
-| [**Advanced Usage**](docs/advanced_usage.md) | Power user features |
-| [**Developer Guide**](docs/developer_guide.md) | Code structure and contribution |
-
-## 🏗️ Project Structure
-
-```
-instagram-youtube-automation/
-├── 📄 instagram_reel_scraper.py     # Core scraper logic
-├── 📄 run_scraper.py                # CLI interface
-├── 📄 config_template.py            # Configuration template
-├── 📄 config.py                     # User configuration (created)
-├── 📁 docs/                         # Documentation
-│   ├── quick_start.md
-│   ├── configuration.md
-│   ├── google_sheets_setup.md
-│   ├── n8n_integration.md
-│   ├── troubleshooting.md
-│   ├── advanced_usage.md
-│   └── developer_guide.md
-├── 📁 tests/                        # Test files
-│   ├── test_google_api.py
-│   ├── test_sheets.py
-│   └── demo.py
-├── 📁 .github/workflows/            # CI/CD workflows
-│   └── download.yml
-├── 📄 login_to_instagram.bat        # Browser login helper
-├── 📄 start_chrome_debug.bat        # Chrome debug helper
-├── 📄 requirements.txt              # Python dependencies
-├── 📄 setup.py                      # Package configuration
-├── 📄 insta to yt.json             # n8n workflow template
-└── 📄 README.md                     # This file
-```
-
-## 🎯 Usage Examples
-
-### Basic Scraping
-```bash
-# Run with default settings
-python run_scraper.py
-
-# Run in fast mode (headless)
-python run_scraper.py --fast
-
-# Scrape last 7 days only
-python run_scraper.py --days 7
-
-# Limit to 10 reels per account
-python run_scraper.py --limit 10
-```
-
-### Advanced Usage
-```bash
-# Custom configuration file
-python run_scraper.py --config my_config.py
-
-# Verbose logging
-python run_scraper.py --verbose
-
-# Skip Google Sheets upload
-python run_scraper.py --no-upload
-
-# Batch mode for multiple configurations
-python run_scraper.py --batch configs/
-```
-
-## 📊 Google Sheets Integration
-
-The tool automatically creates and manages a Google Sheet with the following structure:
-
-| Column | Description | Type |
-|--------|-------------|------|
-| Date | Reel posting date | Date |
-| Username | Instagram username | Text |
-| Link | Direct reel URL | URL |
-| Reel ID | Unique identifier | Text |
-| Description | Video description | Text |
-| Status | Processing status | Dropdown |
-| YT Posted Date | YouTube upload date | Date |
-| YT ID | YouTube video ID | Text |
-
-**Status Options**: `Not Processed`, `Downloaded`, `Uploaded to YT`, `Failed`, `Skipped`
-
-## 🔄 n8n Workflow Integration
-
-1. Import the provided `insta to yt.json` workflow
-2. Configure your Google Sheets connection
-3. Set up YouTube API credentials
-4. Enable webhook triggers for automation
-
-See [n8n Integration Guide](docs/n8n_integration.md) for detailed setup instructions.
-
-## 🛠️ Configuration Options
-
-Key configuration parameters in `config.py`:
-
-```python
-# Instagram accounts to scrape
-INSTAGRAM_URLS = [
-    "https://www.instagram.com/account1/",
-    "https://www.instagram.com/account2/"
-]
-
-# Google Sheets settings
-SPREADSHEET_ID = "your_sheet_id_here"
-WORKSHEET_NAME = "Instagram Reels"
-
-# Scraping preferences
-DAYS_TO_SCRAPE = 30
-MAX_REELS_PER_ACCOUNT = 50
-USE_FAST_MODE = True
-
-# Chrome settings
-CHROME_PROFILE_PATH = "./instagram_profile"
-HEADLESS_MODE = False
-```
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| Chrome won't start | Check Chrome installation and profile path |
-| Login fails | Clear profile and re-login manually |
-| Sheets API errors | Verify credentials and permissions |
-| No reels found | Check account privacy and date range |
-
-See the [Troubleshooting Guide](docs/troubleshooting.md) for detailed solutions.
-
-## 🤝 Contributing
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-See [Developer Guide](docs/developer_guide.md) for development setup and coding standards.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Selenium WebDriver** for browser automation
-- **Google Sheets API** for data storage
-- **n8n** for workflow automation
-- **yt-dlp** for video processing capabilities
-
-## 📞 Support
-
-- 📖 **Documentation**: Check the [docs/](docs/) directory
-- 🐛 **Issues**: Create an issue on GitHub
-- 💬 **Discussions**: Use GitHub Discussions for questions
-- 📧 **Contact**: Create an issue for direct support
 
 ---
 
-**Made with ❤️ for content creators and automation enthusiasts**
+## 🔧 Configuration
+
+All settings are managed in the `config.py` file. Here are some of the key options:
+
+| Setting | Description |
+|---|---|
+| `INSTAGRAM_URLS` | List of Instagram profile URLs to scrape. |
+| `GOOGLE_SHEETS_ID` | The ID of the target Google Sheet. |
+| `TARGET_LINKS` | Number of Reels to scrape per account. |
+| `DAYS_LIMIT` | Only scrape Reels from the last N days. |
+| `HEADLESS` | Run the browser in headless mode (`True`/`False`). |
+| `UPLOAD_TO_GOOGLE_DRIVE` | Enable or disable Google Drive uploads. |
+| `DRIVE_FOLDER_ID` | The destination folder ID in Google Drive. |
+| `ENABLE_CONCURRENT_PROCESSING` | Use parallel processing for speed. |
+
+---
+
+## 📂 Project Structure
+
+```
+i2yt/
+├── .gitignore
+├── config.py                 # Your configuration (created from template)
+├── config_template.py        # Configuration template
+├── description_extractor.py  # Logic for extracting Reel descriptions
+├── google_drive_manager.py   # Handles Google Drive uploads
+├── google_sheets_manager.py  # Manages Google Sheets interactions
+├── instagram_scraper.py      # Core Instagram scraping logic
+├── main_processor.py         # Orchestrates the entire workflow
+├── parallel_processor.py     # Handles concurrent processing
+├── run_scraper.py            # Main entry point to run the application
+├── requirements.txt          # Python dependencies
+├── docs/                     # Documentation files
+└── tests/                    # Test suite
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a pull request.
+
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m '''Add some AmazingFeature'''`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a pull request.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is for educational purposes only. Please be responsible and respect Instagram'''s terms of service. The developers are not responsible for any misuse of this tool.
