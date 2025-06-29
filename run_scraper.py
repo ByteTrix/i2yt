@@ -1,153 +1,166 @@
 #!/usr/bin/env python3
 """
-Simple Instagram Reel Scraper Runner
-This script loads configuration and runs the Instagram scraper.
+Instagram Reel Processing Runner
+Provides different execution modes for the Instagram reel processing workflow
 """
 
 import sys
-import os
-from instagram_reel_scraper import InstagramReelScraper, Config
+import logging
+import argparse
+from datetime import datetime
+from instagram_scraper import InstagramReelScraper
 
-def load_config():
-    """Load configuration from config.py file."""
+# Remove logging configuration - let instagram_scraper handle it
+# The instagram_scraper module will configure logging properly
+logger = logging.getLogger(__name__)
+
+def run_scraping_only():
+    """Run only Instagram scraping (collect links and save to sheets)"""
     try:
-        # Try to import config.py
+        start_time = datetime.now()
+        logger.info("🔍 Starting scraping workflow")
+
+        scraper = InstagramReelScraper()
+        scraped_links = scraper.run_scraping()
+        
+        elapsed = datetime.now() - start_time
+        logger.info(f"✅ Scraping completed! {len(scraped_links)} reels in {elapsed.total_seconds():.1f}s")
+        return scraped_links
+        
+    except Exception as e:
+        logger.error(f"Error in scraping-only mode: {str(e)}")
+        return []
+
+def run_descriptions_only():
+    """Run only description extraction for existing reels"""
+    try:
+        logger.info("Running descriptions-only mode")
+        from main_processor import run_descriptions_only as process_descriptions
+        
+        process_descriptions()
+        logger.info("Description extraction completed")
+        
+    except Exception as e:
+        logger.error(f"Error in descriptions-only mode: {str(e)}")
+
+def run_uploads_only():
+    """Run only Google Drive uploads for pending reels"""
+    try:
+        logger.info("Running uploads-only mode")
+        from main_processor import run_uploads_only as process_uploads
+        
+        process_uploads()
+        logger.info("Upload processing completed")
+        
+    except Exception as e:
+        logger.error(f"Error in uploads-only mode: {str(e)}")
+
+def run_full_workflow():
+    """Run complete workflow: scraping + descriptions + uploads"""
+    try:
+        start_time = datetime.now()
+        logger.info("🚀 Starting full workflow")
+        
+        scraper = InstagramReelScraper()
+        scraper.run_full_workflow()
+        
+        elapsed = datetime.now() - start_time
+        logger.info(f"✅ Full workflow completed in {elapsed.total_seconds():.1f}s")
+        
+    except Exception as e:
+        logger.error(f"Error in full workflow mode: {str(e)}")
+
+def run_processing_only():
+    """Run only processing (descriptions + uploads) for existing data"""
+    try:
+        logger.info("Running processing-only mode (no new scraping)")
+        from main_processor import InstagramProcessor
+        
+        processor = InstagramProcessor()
+        processor.run_full_workflow()
+        
+        logger.info("Processing workflow completed")
+        
+    except Exception as e:
+        logger.error(f"Error in processing-only mode: {str(e)}")
+
+def show_status():
+    """Show current status of the system"""
+    try:
+        logger.info("Checking system status...")
+        from google_sheets_manager import GoogleSheetsManager
         import config
         
-        # Get Instagram URLs - support both single URL and list of URLs
-        instagram_urls = getattr(config, 'INSTAGRAM_URLS', [config.INSTAGRAM_URL])
-        return Config(
-            instagram_url=config.INSTAGRAM_URL,  # Kept for backwards compatibility
-            instagram_urls=instagram_urls,
-            target_links=getattr(config, 'TARGET_LINKS', 0),
-            days_limit=getattr(config, 'DAYS_LIMIT', 30),
-            google_sheets_id=config.GOOGLE_SHEETS_ID,
-            credentials_file=config.CREDENTIALS_FILE,
-            max_scrolls=config.MAX_SCROLLS,
-            scroll_delay=config.SCROLL_DELAY,
-            batch_size=getattr(config, 'BATCH_SIZE', 25),
-            implicit_wait=config.IMPLICIT_WAIT,
-            page_load_timeout=config.PAGE_LOAD_TIMEOUT,
-            headless=config.HEADLESS,
-            fast_mode=getattr(config, 'FAST_MODE', True)
-        )
-    except ImportError:
-        print("❌ Error: config.py file not found!")
-        print("📝 Please copy config_template.py to config.py and update with your values")
-        sys.exit(1)
-    except AttributeError as e:
-        print(f"❌ Error: Missing configuration in config.py: {e}")
-        print("📝 Please check config_template.py for required configuration")
-        sys.exit(1)
-
-def check_requirements():
-    """Check if required files exist."""
-    try:
-        import config
+        sheets_manager = GoogleSheetsManager()
         
-        # Check if credentials file exists
-        if not os.path.exists(config.CREDENTIALS_FILE):
-            print(f"❌ Error: Credentials file '{config.CREDENTIALS_FILE}' not found!")
-            print("📝 Please download your Google Service Account credentials JSON file")
-            return False
-            
-        # Basic validation of URLs
-        if "your_target_account" in config.INSTAGRAM_URL:
-            print("❌ Error: Please update INSTAGRAM_URL in config.py with actual Instagram URL")
-            return False
-            
-        # Check if INSTAGRAM_URLS is properly configured
-        if hasattr(config, 'INSTAGRAM_URLS'):
-            if not isinstance(config.INSTAGRAM_URLS, list) or len(config.INSTAGRAM_URLS) == 0:
-                print("❌ Error: INSTAGRAM_URLS in config.py must be a non-empty list")
-                return False
-            
-            for url in config.INSTAGRAM_URLS:
-                if "instagram.com" not in url:
-                    print(f"❌ Error: Invalid Instagram URL in INSTAGRAM_URLS: {url}")
-                    print("URLs should be in the format 'https://www.instagram.com/username/'")
-                    return False
+        # Get status counts
+        pending_rows = sheets_manager.get_rows_by_status("pending")
+        processing_rows = sheets_manager.get_rows_by_status("processing")
         
-        # Check TARGET_LINKS if it exists
-        if hasattr(config, 'TARGET_LINKS'):
-            if not isinstance(config.TARGET_LINKS, int) or config.TARGET_LINKS < 0:
-                print("❌ Error: TARGET_LINKS in config.py must be a non-negative integer")
-                return False
-            
-        if "your_google_sheets_id_here" in config.GOOGLE_SHEETS_ID:
-            print("❌ Error: Please update GOOGLE_SHEETS_ID in config.py with actual Sheets ID")
-            return False
-            
-        return True
+        # Get URLs without descriptions
+        urls_without_desc = sheets_manager.get_urls_without_descriptions()
         
-    except ImportError:
-        return False
+        # System status summary
+        logger.info(f"System status - Pending uploads: {len(pending_rows)}, Processing: {len(processing_rows)}, Missing descriptions: {len(urls_without_desc)}")
+        
+        # Configuration summary
+        desc_status = "ENABLED" if config.EXTRACT_DESCRIPTIONS else "DISABLED"
+        upload_status = "ENABLED" if config.UPLOAD_TO_GOOGLE_DRIVE else "DISABLED"
+        parallel_status = "ENABLED" if config.ENABLE_CONCURRENT_PROCESSING else "DISABLED"
+        
+        logger.info(f"Configuration - Descriptions: {desc_status}, Uploads: {upload_status}, Parallel: {parallel_status}")
+        logger.info(f"Target URLs: {len(config.INSTAGRAM_URLS)}, Workers: {getattr(config, 'MAX_SCRAPING_WORKERS', 4)} scraping, {getattr(config, 'MAX_UPLOAD_WORKERS', 2)} upload, {getattr(config, 'MAX_DESCRIPTION_WORKERS', 5)} description")
+        
+    except Exception as e:
+        logger.error(f"Error checking status: {str(e)}")
 
 def main():
-    """Main function to run the scraper with proper setup checks."""    # Setup UTF-8 encoding for Windows console
-    import sys
-    try:
-        if hasattr(sys.stdout, 'reconfigure'):
-            sys.stdout.reconfigure(encoding='utf-8')
-    except:
-        pass  # Fallback for older Python versions
+    """Main function with command line argument parsing"""
+    parser = argparse.ArgumentParser(
+        description="Instagram Reel Processing Runner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python run_scraper.py                    # Run full workflow
+  python run_scraper.py --mode scraping    # Only scrape Instagram
+  python run_scraper.py --mode descriptions # Only extract descriptions
+  python run_scraper.py --mode uploads     # Only upload to Drive
+  python run_scraper.py --mode processing  # Only process existing data
+  python run_scraper.py --status           # Show system status
+        """
+    )
     
-    print("🤖 Instagram Reel Scraper - SPEED OPTIMIZED")
-    print("=" * 60)
+    parser.add_argument(
+        '--mode',
+        choices=['full', 'scraping', 'descriptions', 'uploads', 'processing'],
+        default='full',
+        help='Execution mode (default: full)'
+    )
     
-    # Load configuration
-    print("📝 Loading configuration...")
-    config = load_config()
-    print("✅ Configuration loaded successfully")
+    parser.add_argument(
+        '--status',
+        action='store_true',
+        help='Show system status and exit'
+    )
     
-    # Display optimized configuration summary
-    print("\n📊 SPEED-OPTIMIZED Scraper Configuration:")
-    print(f"  • URLs to scrape: {len(config.instagram_urls)}")
-    print(f"  • Days limit: {config.days_limit} days (faster = fewer days)")
-    print(f"  • Scroll delay: {config.scroll_delay}s (optimized for speed)")
-    print(f"  • Batch size: {config.batch_size} (larger = faster saves)")
+    args = parser.parse_args()
     
-    # Display target info if set
-    if config.target_links > 0:
-        print(f"  • Target links to collect: {config.target_links}")
-    else:
-        print("  • No link limit (will collect all available)")
-        
-    print(f"  • Max scrolls per URL: {config.max_scrolls}")
-    print(f"  • Ultra-fast mode: {'🚀 ENABLED' if config.fast_mode else '❌ DISABLED'}")
-    print(f"  • Headless mode: {'🚀 ENABLED' if config.headless else '👁️ VISIBLE'}")
-    print(f"  • Implicit wait: {config.implicit_wait}s (faster = lower)")
-    print(f"  • Page load timeout: {config.page_load_timeout}s (faster = lower)")
+    # Show status if requested
+    if args.status:
+        show_status()
+        return
     
-    # Check requirements
-    print("\n🔍 Checking requirements...")
-    if not check_requirements():
-        print("❌ Requirements check failed. Please fix the issues above.")
-        sys.exit(1)
-    print("✅ Requirements check passed")
-    
-    # Run scraper
-    print("\n🚀 Starting Instagram Reel Scraper...")
-    try:
-        scraper = InstagramReelScraper(config)
-        collected_links = scraper.run()
-        
-        # Display results
-        print("\n📈 Scraping Results:")
-        print(f"  • Total URLs processed: {len(config.instagram_urls)}")
-        print(f"  • Total links collected: {len(collected_links)}")
-        
-        if config.target_links > 0:
-            target_percentage = min(100, len(collected_links) / config.target_links * 100)
-            print(f"  • Target completion: {target_percentage:.1f}% ({len(collected_links)}/{config.target_links})")
-            
-        print("\n✅ Scraping completed successfully!")
-        
-    except KeyboardInterrupt:
-        print("\n⚠️  Scraping interrupted by user")
-    except Exception as e:
-        print(f"❌ Scraping failed: {e}")
-        sys.exit(1)
+    # Execute based on mode
+    if args.mode == 'full':
+        run_full_workflow()
+    elif args.mode == 'scraping':
+        run_scraping_only()
+    elif args.mode == 'descriptions':
+        run_descriptions_only()
+    elif args.mode == 'uploads':
+        run_uploads_only()
+    elif args.mode == 'processing':
+        run_processing_only()
 
 if __name__ == "__main__":
     main()

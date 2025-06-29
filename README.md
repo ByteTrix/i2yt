@@ -138,11 +138,13 @@ The tool automatically creates and manages a Google Sheet with the following str
 | Column | Description | Type |
 |--------|-------------|------|
 | Date | Reel posting date | Date |
-| Instagram Username | Account handle | Text |
+| Username | Instagram username | Text |
 | Link | Direct reel URL | URL |
 | Reel ID | Unique identifier | Text |
+| Description | Video description | Text |
 | Status | Processing status | Dropdown |
 | YT Posted Date | YouTube upload date | Date |
+| YT ID | YouTube video ID | Text |
 
 **Status Options**: `Not Processed`, `Downloaded`, `Uploaded to YT`, `Failed`, `Skipped`
 

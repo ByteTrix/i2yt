@@ -22,7 +22,7 @@ chromedriver.log
 # Log files
 *.log
 logs/
-
+*.json
 # IDE and editor files
 .vscode/
 .idea/
@@ -55,3 +55,4 @@ build/
 dist/
 *.egg-info/
 .eggs/
+cookies.txt

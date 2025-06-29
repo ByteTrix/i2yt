@@ -1,6 +1,5 @@
 # Instagram Reel Scraper Dependencies
 
-
 selenium
 gspread
 google-api-python-client
@@ -10,6 +9,10 @@ google-auth-oauthlib
 # Additional utilities
 requests
 beautifulsoup4
+yt-dlp
+
+# Progress bars and UI
+tqdm
 
 # Development and debugging
 python-dotenv
