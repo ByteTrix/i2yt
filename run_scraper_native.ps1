@@ -1,6 +1,4 @@
-# Native PowerShell Instagram Reel Scraper Launcher
 # Pure PowerShell implementation without embedded Python code
-
 # Set window title and clear screen
 $Host.UI.RawUI.WindowTitle = "Instagram Reel Scraper"
 Clear-Host
