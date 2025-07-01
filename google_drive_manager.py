@@ -446,6 +446,108 @@ class GoogleDriveManager:
                     self.logger.debug(f"🗑️  Final cleanup of local file: {local_file}")
                 except Exception as final_cleanup_error:
                     self.logger.warning(f"⚠️  Final cleanup failed: {final_cleanup_error}")
+    
+    def cleanup_downloaded_files(self, successful_uploads: List[str] = None, force_cleanup: bool = False):
+        """
+        Clean up downloaded files after successful uploads or force cleanup all files.
+        
+        Args:
+            successful_uploads: List of reel IDs that were successfully uploaded
+            force_cleanup: If True, clean up all downloaded files regardless of upload status
+        """
+        try:
+            if not os.path.exists(self.download_dir):
+                self.logger.debug("📂 Download directory doesn't exist, nothing to clean")
+                return
+            
+            files_cleaned = 0
+            files_failed = 0
+            
+            # Get all files in download directory
+            try:
+                all_files = os.listdir(self.download_dir)
+                if not all_files:
+                    self.logger.debug("📂 Download directory is empty")
+                    return
+                
+                self.logger.info(f"🧹 Starting cleanup of downloaded files...")
+                self.logger.debug(f"📂 Found {len(all_files)} files in download directory")
+                
+                for filename in all_files:
+                    file_path = os.path.join(self.download_dir, filename)
+                    
+                    # Skip if not a video file
+                    if not filename.endswith('.mp4'):
+                        continue
+                    
+                    should_delete = force_cleanup
+                    
+                    # If we have a list of successful uploads, only delete those
+                    if successful_uploads and not force_cleanup:
+                        # Extract reel ID from filename (remove timestamp suffix)
+                        reel_id = filename.split('_')[0].replace('.mp4', '')
+                        should_delete = reel_id in successful_uploads
+                    
+                    if should_delete:
+                        try:
+                            # Multiple attempts with increasing delays
+                            max_attempts = 5
+                            for attempt in range(max_attempts):
+                                try:
+                                    # Force garbage collection to release any handles
+                                    import gc
+                                    gc.collect()
+                                    
+                                    # Wait progressively longer between attempts
+                                    if attempt > 0:
+                                        wait_time = attempt * 2
+                                        self.logger.debug(f"🕐 Waiting {wait_time}s before cleanup attempt {attempt + 1}")
+                                        time.sleep(wait_time)
+                                    
+                                    # Try to delete the file
+                                    if os.path.exists(file_path):
+                                        os.unlink(file_path)
+                                        files_cleaned += 1
+                                        self.logger.debug(f"🗑️  Cleaned: {filename}")
+                                        break
+                                    else:
+                                        self.logger.debug(f"📄 File already deleted: {filename}")
+                                        break
+                                        
+                                except PermissionError as pe:
+                                    if attempt == max_attempts - 1:
+                                        self.logger.warning(f"⚠️  Permission denied cleaning {filename} after {max_attempts} attempts")
+                                        files_failed += 1
+                                    else:
+                                        self.logger.debug(f"🔒 Permission denied for {filename}, attempt {attempt + 1}")
+                                        
+                                except Exception as e:
+                                    if attempt == max_attempts - 1:
+                                        self.logger.warning(f"⚠️  Failed to clean {filename}: {e}")
+                                        files_failed += 1
+                                    else:
+                                        self.logger.debug(f"❌ Error cleaning {filename}, attempt {attempt + 1}: {e}")
+                        
+                        except Exception as e:
+                            self.logger.warning(f"⚠️  Error processing cleanup for {filename}: {e}")
+                            files_failed += 1
+                
+                # Summary
+                if files_cleaned > 0 or files_failed > 0:
+                    status_icon = "✅" if files_failed == 0 else "⚠️"
+                    self.logger.info(f"{status_icon} Cleanup complete: {files_cleaned} cleaned, {files_failed} failed")
+                else:
+                    self.logger.debug("📂 No files needed cleanup")
+                    
+            except Exception as e:
+                self.logger.error(f"💥 Error during directory cleanup: {e}")
+                
+        except Exception as e:
+            self.logger.error(f"💥 Error in cleanup_downloaded_files: {e}")
+
+    def cleanup_all_downloads(self):
+        """Force cleanup of all downloaded files (useful for batch cleanup)"""
+        self.cleanup_downloaded_files(force_cleanup=True)
 
 
 if __name__ == "__main__":

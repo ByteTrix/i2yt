@@ -8,6 +8,7 @@ import logging
 import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+import random
 
 # Google Sheets imports
 import gspread
@@ -20,8 +21,61 @@ import config
 # Setup logging - use the parent logger configuration
 logger = logging.getLogger(__name__)
 
+class RateLimiter:
+    """Rate limiter for Google Sheets API calls"""
+    
+    def __init__(self, max_calls_per_minute=None):
+        self.max_calls_per_minute = max_calls_per_minute or getattr(config, 'SHEETS_MAX_CALLS_PER_MINUTE', 50)
+        self.calls = []
+    
+    def wait_if_needed(self):
+        """Wait if we're approaching rate limits"""
+        now = time.time()
+        
+        # Remove calls older than 1 minute
+        self.calls = [call_time for call_time in self.calls if now - call_time < 60]
+        
+        # If we're approaching the limit, wait
+        if len(self.calls) >= self.max_calls_per_minute - 5:  # Leave some buffer
+            wait_time = 60 - (now - self.calls[0]) + random.uniform(1, 3)  # Add jitter
+            logger.info(f"Rate limiting: waiting {wait_time:.1f} seconds...")
+            time.sleep(wait_time)
+            self.calls = []  # Reset after waiting
+        
+        # Record this call
+        self.calls.append(now)
+
+def retry_on_quota_error(max_retries=None, base_delay=None):
+    """Decorator to retry API calls on quota exceeded errors"""
+    max_retries = max_retries or getattr(config, 'SHEETS_RETRY_ATTEMPTS', 3)
+    base_delay = base_delay or getattr(config, 'SHEETS_BASE_RETRY_DELAY', 2)
+    
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'quota exceeded' in error_msg or 'rate limit' in error_msg or '429' in error_msg:
+                        if attempt < max_retries - 1:
+                            # Exponential backoff with jitter
+                            delay = base_delay * (2 ** attempt) + random.uniform(1, 3)
+                            logger.warning(f"Quota exceeded, retrying in {delay:.1f} seconds... (attempt {attempt + 1}/{max_retries})")
+                            time.sleep(delay)
+                            continue
+                        else:
+                            logger.error(f"Max retries reached for {func.__name__}: {e}")
+                            return None
+                    else:
+                        # Re-raise non-quota errors immediately
+                        raise e
+            return None
+        return wrapper
+    return decorator
+
 class GoogleSheetsManager:
-    """Handles all Google Sheets operations"""
+    """Handles all Google Sheets operations with rate limiting and error handling"""
     
     def __init__(self):
         self.logger = logger
@@ -29,6 +83,9 @@ class GoogleSheetsManager:
         self.credentials_file = config.CREDENTIALS_FILE
         self.gc = None
         self.worksheet = None
+        self.rate_limiter = RateLimiter()  # Use config defaults
+        self._url_cache = set()  # Cache for existing URLs
+        self._cache_loaded = False
         self.setup_sheets_client()
     
     def setup_sheets_client(self):
@@ -250,9 +307,11 @@ class GoogleSheetsManager:
         except Exception as e:
             self.logger.warning(f"Could not setup dropdown validation and formatting: {e}")
     
+    @retry_on_quota_error(max_retries=3, base_delay=2)
     def get_all_data(self) -> List[List[str]]:
-        """Get all data from the worksheet"""
+        """Get all data from the worksheet with rate limiting"""
         try:
+            self.rate_limiter.wait_if_needed()
             return self.worksheet.get_all_values()
         except Exception as e:
             self.logger.error(f"Error getting all data: {str(e)}")
@@ -388,9 +447,30 @@ class GoogleSheetsManager:
             self.logger.error(f"Error getting rows by status: {str(e)}")
             return []
     
+    def _load_url_cache(self):
+        """Load all existing URLs into cache to avoid repeated API calls"""
+        if self._cache_loaded:
+            return
+            
+        try:
+            self.logger.info("Loading URL cache from Google Sheets...")
+            all_data = self.get_all_data()
+            
+            if all_data:
+                for row in all_data[1:]:  # Skip header
+                    if len(row) > 2 and row[2]:  # URL is in column C (index 2)
+                        self._url_cache.add(row[2])
+                
+                self.logger.info(f"Loaded {len(self._url_cache)} URLs into cache")
+            
+            self._cache_loaded = True
+            
+        except Exception as e:
+            self.logger.error(f"Error loading URL cache: {str(e)}")
+
     def url_exists(self, url: str) -> bool:
         """
-        Check if a URL already exists in the sheet
+        Check if a URL already exists in the sheet using cache
         
         Args:
             url: URL to check
@@ -399,21 +479,20 @@ class GoogleSheetsManager:
             True if URL exists, False otherwise
         """
         try:
-            all_data = self.get_all_data()
+            # Load cache if not already loaded
+            if not self._cache_loaded:
+                self._load_url_cache()
             
-            for row in all_data[1:]:  # Skip header
-                if len(row) > 2 and row[2] == url:  # URL is now in column C (index 2)
-                    return True
-            
-            return False
+            return url in self._url_cache
             
         except Exception as e:
             self.logger.error(f"Error checking if URL exists: {str(e)}")
             return False
     
+    @retry_on_quota_error(max_retries=3, base_delay=2)
     def batch_add_reels(self, reels_data: List[Dict]):
         """
-        Add multiple reels in batch for better performance
+        Add multiple reels in batch for better performance with rate limiting
         
         Args:
             reels_data: List of dictionaries with reel data
@@ -422,6 +501,8 @@ class GoogleSheetsManager:
             if not reels_data:
                 return
             
+            self.rate_limiter.wait_if_needed()
+            
             # Get current data to find next row
             all_values = self.get_all_data()
             next_row = len(all_values) + 1
@@ -429,10 +510,11 @@ class GoogleSheetsManager:
             # Prepare batch data
             batch_data = []
             for reel in reels_data:
+                url = reel.get('url', '')
                 row_data = [
                     reel.get('date', ''),
                     reel.get('username', ''),
-                    reel.get('url', ''),
+                    url,
                     reel.get('reel_id', ''),
                     reel.get('description', ''),
                     reel.get('status', 'pending'),
@@ -440,10 +522,16 @@ class GoogleSheetsManager:
                     reel.get('yt_id', '')
                 ]
                 batch_data.append(row_data)
+                
+                # Update cache
+                if url:
+                    self._url_cache.add(url)
             
             # Calculate range
             end_row = next_row + len(batch_data) - 1
             range_name = f'A{next_row}:H{end_row}'
+            
+            self.rate_limiter.wait_if_needed()
             
             # Update in batch
             self.worksheet.update(range_name, batch_data)

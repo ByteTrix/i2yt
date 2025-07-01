@@ -530,13 +530,13 @@ class InstagramReelScraper:
                 consecutive_no_new_links = 0
                 
             # Stop conditions (updated for better target collection):
-            # 1. No new height AND no new links found for 2 consecutive scrolls (end of page content)
-            # 2. No new links found for 5 consecutive scrolls (if we have a target to meet)
-            # 3. No new links found for 3 consecutive scrolls (if no target specified)
+            # 1. No new height AND no new links found for 4 consecutive scrolls (end of page content)
+            # 2. No new links found for 8 consecutive scrolls (if we have a target to meet)
+            # 3. No new links found for 5 consecutive scrolls (if no target specified)
             
-            max_no_new_links = 5 if target_remaining > 0 else 3
+            max_no_new_links = 8 if target_remaining > 0 else 5
             
-            if new_height == last_height and consecutive_no_new_links >= 2:
+            if new_height == last_height and consecutive_no_new_links >= 4:
                 self.logger.info("Reached end of page content (no new height and no new links)")
                 break
             elif consecutive_no_new_links >= max_no_new_links:
@@ -936,7 +936,10 @@ class InstagramReelScraper:
             """
             js_results = self.driver.execute_script(links_js)
             
-            if js_results:
+            # Debug logging
+            self.logger.debug(f"JavaScript query returned: {len(js_results) if js_results else 0} results")
+            
+            if js_results and len(js_results) > 0:
                 recent_links = []
                 seen = set()
                 
@@ -964,11 +967,11 @@ class InstagramReelScraper:
                     return recent_links
                 
                 else:
-                    # DETAILED MODE: Check dates using parallel processing (faster)
+                    # DETAILED MODE: Check dates using sequential processing
                     if getattr(config, 'MINIMAL_OUTPUT', True):
                         logger.info(f"Filtering {len(js_results)} reels by date (within {self.scraping_config.days_limit} days)")
                     
-                    # Prepare URLs for parallel processing
+                    # Prepare URLs for date filtering
                     reel_urls = []
                     seen = set()
                     
@@ -984,18 +987,21 @@ class InstagramReelScraper:
                                 reel_urls.append(clean_url)
                                 seen.add(href)
                     
-                    # Use parallel processing for date checking
+                    # Use sequential processing for date checking
                     recent_links = self._filter_reels_by_date_parallel(reel_urls)
                     
                     if getattr(config, 'MINIMAL_OUTPUT', True):
                         logger.info(f"Date filtering complete: {len(recent_links)}/{len(reel_urls)} reels within {self.scraping_config.days_limit} days")
                         
                     self.logger.info(f"Found {len(recent_links)} recent reels (within {self.scraping_config.days_limit} days) "
-                                   f"out of {len(reel_urls)} total using parallel detailed filtering")
+                                   f"out of {len(reel_urls)} total using sequential detailed filtering")
                     return recent_links
+            else:
+                self.logger.debug("JavaScript query returned no results, falling back to Selenium")
             
         except Exception as e:
             self.logger.warning(f"Error with JavaScript approach: {e}")
+            self.logger.debug(f"JavaScript error details: {type(e).__name__}: {str(e)}")
             
         # Fallback to Selenium method
         self.logger.info("Using Selenium fallback method")
@@ -1115,20 +1121,76 @@ class InstagramReelScraper:
             # Get all data from sheets
             all_data = self.sheets_manager.get_all_data()
             
-            # Extract reel IDs from URLs (assuming URL is in column 2, index 1)
-            for row in all_data[1:]:  # Skip header
-                if len(row) > 1:  # Has URL column
-                    url = row[1]
-                    if url:
-                        reel_id = self.extract_reel_id(url)
-                        if reel_id and reel_id != f"unknown_{int(time.time())}":
-                            self.existing_reel_ids.add(reel_id)
+            if not all_data:
+                self.logger.warning("No data returned from Google Sheets")
+                self.reel_id_cache_loaded = False
+                return
             
+            self.logger.debug(f"Got {len(all_data)} rows from Google Sheets")
+            
+            # Check header row to understand column structure
+            if len(all_data) > 0:
+                header = all_data[0]
+                self.logger.debug(f"Header row: {header}")
+                
+                # Find URL column index
+                url_column_index = -1
+                reel_id_column_index = -1
+                
+                for i, col in enumerate(header):
+                    if col and ('url' in col.lower() or 'link' in col.lower()):
+                        url_column_index = i
+                        self.logger.debug(f"Found URL column at index {i}: '{col}'")
+                    elif col and ('reel_id' in col.lower() or 'id' in col.lower()):
+                        reel_id_column_index = i
+                        self.logger.debug(f"Found Reel ID column at index {i}: '{col}'")
+                
+                # Fallback to common column positions if not found
+                if url_column_index == -1:
+                    url_column_index = 1  # Usually second column (index 1)
+                    self.logger.debug(f"Using fallback URL column index: {url_column_index}")
+                
+                initial_count = len(self.existing_reel_ids)
+                
+                # Extract reel IDs from URLs or direct reel ID column
+                for row_index, row in enumerate(all_data[1:], 1):  # Skip header
+                    try:
+                        reel_id = None
+                        
+                        # Try to get reel ID from dedicated column first
+                        if reel_id_column_index >= 0 and len(row) > reel_id_column_index:
+                            direct_reel_id = row[reel_id_column_index]
+                            if direct_reel_id and direct_reel_id.strip():
+                                reel_id = direct_reel_id.strip()
+                                self.logger.debug(f"Row {row_index}: Found direct reel ID: {reel_id}")
+                        
+                        # If no direct reel ID, extract from URL
+                        if not reel_id and len(row) > url_column_index:
+                            url = row[url_column_index]
+                            if url and url.strip():
+                                reel_id = self.extract_reel_id(url.strip())
+                                if reel_id:
+                                    self.logger.debug(f"Row {row_index}: Extracted reel ID from URL: {reel_id}")
+                        
+                        # Add to cache if valid
+                        if reel_id and reel_id != f"unknown_{int(time.time())}" and 'unknown_' not in reel_id:
+                            self.existing_reel_ids.add(reel_id)
+                        elif reel_id:
+                            self.logger.debug(f"Row {row_index}: Skipping invalid reel ID: {reel_id}")
+                            
+                    except Exception as row_error:
+                        self.logger.debug(f"Error processing row {row_index}: {row_error}")
+                        continue
+                
+                loaded_count = len(self.existing_reel_ids) - initial_count
+                self.logger.info(f"Loaded {loaded_count} existing reel IDs for duplicate checking")
+                self.logger.debug(f"Total unique reel IDs in cache: {len(self.existing_reel_ids)}")
+                
             self.reel_id_cache_loaded = True
-            self.logger.info(f"Loaded {len(self.existing_reel_ids)} existing reel IDs for duplicate checking")
             
         except Exception as e:
-            self.logger.warning(f"Could not load existing reel IDs: {e}")
+            self.logger.error(f"Could not load existing reel IDs: {e}")
+            self.logger.debug(f"Exception details: {type(e).__name__}: {str(e)}")
             self.reel_id_cache_loaded = False
 
     def is_duplicate_reel(self, reel_id: str) -> bool:
@@ -1193,13 +1255,14 @@ class InstagramReelScraper:
     # ENHANCED PARALLEL PROCESSING FUNCTIONS
     # =============================================================================
     
-    def _process_single_link(self, link: str) -> Optional[str]:
+    def _process_single_link(self, link: str, **kwargs) -> Optional[str]:
         """
         🔧 Process a single link for validation and reel ID extraction
         Optimized for use with professional parallel processor
         
         Args:
             link: Instagram link to process
+            **kwargs: Additional keyword arguments (ignored, for parallel processing compatibility)
             
         Returns:
             Valid link or None if invalid
@@ -1232,6 +1295,70 @@ class InstagramReelScraper:
             progress_pct = (completed / total) * 100 if total > 0 else 0
             self.logger.info(f"📊 Link Processing: {completed}/{total} ({progress_pct:.1f}%) - "
                            f"✅ {success} valid, ❌ {failed} invalid")
+
+    def _filter_reels_by_date_parallel(self, reel_urls: List[str]) -> List[str]:
+        """
+        Filter reels by date using parallel processing for speed optimization.
+        
+        Args:
+            reel_urls: List of reel URLs to filter
+            
+        Returns:
+            List of URLs that are within the date limit
+        """
+        if not reel_urls:
+            return []
+            
+        try:
+            self.logger.info(f"🔄 Starting sequential date filtering for {len(reel_urls)} reels...")
+            
+            # Note: For thread safety with Selenium WebDriver, we need to use sequential processing
+            # as WebDriver instances cannot be shared across threads safely
+            self.logger.debug("ℹ️  Using sequential processing for thread safety with Selenium WebDriver")
+            
+            # Fallback to sequential processing for thread safety
+            recent_urls = []
+            with tqdm(total=len(reel_urls), desc="Date checking", 
+                     disable=getattr(config, 'MINIMAL_OUTPUT', True)) as pbar:
+                for i, url in enumerate(reel_urls, 1):
+                    try:
+                        if self.check_reel_date_detailed(url):
+                            recent_urls.append(url)
+                        pbar.update(1)
+                        
+                        # Log progress every 5 items
+                        if i % 5 == 0 or i == len(reel_urls):
+                            self.logger.info(f"Date checking progress: {i}/{len(reel_urls)} ({len(recent_urls)} valid)")
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Error checking date for {url}: {e}")
+                        pbar.update(1)
+                        continue
+            
+            self.logger.info(f"✅ Sequential date filtering complete: {len(recent_urls)}/{len(reel_urls)} reels within {self.scraping_config.days_limit} days")
+            
+            return recent_urls
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error in date filtering: {e}")
+            self.logger.info("🔄 Falling back to basic sequential processing...")
+            
+            # Final fallback - basic sequential processing without progress bar
+            recent_urls = []
+            for i, url in enumerate(reel_urls, 1):
+                try:
+                    if self.check_reel_date_detailed(url):
+                        recent_urls.append(url)
+                        
+                    # Log progress every 10 items
+                    if i % 10 == 0 or i == len(reel_urls):
+                        self.logger.info(f"Basic date checking: {i}/{len(reel_urls)} processed, {len(recent_urls)} valid")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Error in basic date check for {url}: {e}")
+                    continue
+            
+            return recent_urls
 
     # =============================================================================
     # ENHANCED DATE CHECKING FUNCTIONS
@@ -1410,10 +1537,14 @@ class InstagramReelScraper:
         except Exception:
             return None
     
-    def check_reel_date_detailed(self, reel_url: str) -> bool:
+    def check_reel_date_detailed(self, reel_url: str, **kwargs) -> bool:
         """
         Check if reel is within days limit using detailed date extraction.
         This opens the individual reel to get precise date information.
+        
+        Args:
+            reel_url: Instagram reel URL to check
+            **kwargs: Additional keyword arguments (ignored, for parallel processing compatibility)
         """
         try:
             self.logger.debug(f"🔍 Checking detailed date for reel: {reel_url}")

@@ -132,8 +132,9 @@ class InstagramProcessor:
             self.logger.info(f"📤 Found {len(pending_rows)} pending uploads")
             
             # Always use sequential processing for uploads (more reliable)
-            self.logger.info("� Using sequential upload processing for reliability")
+            self.logger.info("🔄 Using sequential upload processing for reliability")
             success_count = 0
+            successful_reel_ids = []  # Track successful uploads for cleanup
             
             # Progress bar for uploads
             progress_bar = None
@@ -149,8 +150,12 @@ class InstagramProcessor:
             
             try:
                 for i, row_data in enumerate(pending_rows, 1):
+                    # Extract reel ID for tracking
+                    reel_id = self.drive_manager.extract_reel_id(row_data['url'])
+                    
                     if self._process_single_upload(row_data):
                         success_count += 1
+                        successful_reel_ids.append(reel_id)
                     
                     if progress_bar:
                         progress_bar.update(1)
@@ -174,6 +179,13 @@ class InstagramProcessor:
             self.logger.info(f"│ ❌ Failed: {failed_count:<46} │")
             self.logger.info(f"│ 📊 Success rate: {success_rate:.1f}%{' ' * (38 - len(f'{success_rate:.1f}%'))} │")
             self.logger.info("└─" + "─" * 60 + "┘")
+            
+            # Clean up downloaded files after successful uploads
+            if successful_reel_ids:
+                self.logger.info(f"🧹 Cleaning up downloaded files for {len(successful_reel_ids)} successful uploads...")
+                self.drive_manager.cleanup_downloaded_files(successful_reel_ids)
+            else:
+                self.logger.debug("📂 No successful uploads to clean up")
             
             self.logger.info("Pending uploads processing completed")
             
@@ -291,6 +303,13 @@ class InstagramProcessor:
             # Beautiful completion summary
             end_time = time.time()
             duration = end_time - start_time
+            
+            # Final cleanup of all downloaded files
+            self.logger.info("┌─ 🧹 STEP 4: FINAL CLEANUP")
+            self.logger.info("│  Cleaning up temporary files...")
+            self.drive_manager.cleanup_all_downloads()
+            self.logger.info("│  ✅ Cleanup completed")
+            self.logger.info("└─ Step 4 completed\n")
             
             self.logger.info("╔" + "═" * 78 + "╗")
             self.logger.info("║" + " " * 22 + "🎉 WORKFLOW COMPLETED SUCCESSFULLY!" + " " * 22 + "║")
