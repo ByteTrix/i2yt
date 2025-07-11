@@ -1,5 +1,6 @@
-# Simple Instagram Reel Scraper Launcher
-# Easy-to-use PowerShell script to run the Instagram scraper
+# Pure PowerShell implementation without embedded Python code
+# Ensure we're in the correct directory
+Set-Location (Split-Path $MyInvocation.MyCommand.Path -Parent)
 
 # Set window title and clear screen
 $Host.UI.RawUI.WindowTitle = "Instagram Reel Scraper"
@@ -7,29 +8,31 @@ Clear-Host
 
 #region Helper Functions
 
-function Invoke-PythonScript {
+function Invoke-PythonModule {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$Script,
+        [string]$Module,
+        
+        [Parameter(Mandatory=$true)]
+        [string]$Function,
         
         [Parameter(Mandatory=$false)]
-        [string]$ErrorMessage = "Python script execution failed"
+        [string[]]$Args = @(),
+        
+        [Parameter(Mandatory=$false)]
+        [string]$ErrorMessage = "Python execution failed"
     )
     
     try {
-        # Create a properly escaped Python script
-        $escapedScript = $Script -replace '"', '\"' -replace '`', '``'
+        $argString = if ($Args.Count -gt 0) { "'" + ($Args -join "', '") + "'" } else { "" }
+        $pythonScript = "from $Module import $Function; $Function($argString)"
         
-        # Use python -c with proper quoting
-        $result = Invoke-Expression "python -c `"$escapedScript`"" 2>&1
+        $result = python -c $pythonScript 2>&1
         
         if ($LASTEXITCODE -eq 0) {
             return $result
         } else {
             Write-Host "$ErrorMessage (Exit code: $LASTEXITCODE)" -ForegroundColor Red
-            if ($result) {
-                Write-Host "Details: $result" -ForegroundColor Yellow
-            }
             return $null
         }
     }
@@ -39,138 +42,137 @@ function Invoke-PythonScript {
     }
 }
 
-function Get-ConfigDisplay {
+function Show-ConfigDisplay {
+    Write-Host "📊 Reading configuration..." -ForegroundColor Yellow
+    
     try {
-        # Use a simpler approach with python -c and here-string
-        python -c @"
-import config
-try:
-    print('📊 Instagram URLs: {} configured'.format(len(config.INSTAGRAM_URLS)))
-    print('🎯 Target links per URL: {}'.format(config.TARGET_LINKS))
-    print('📅 Days limit: {} days'.format(config.DAYS_LIMIT))
-    print('👻 Headless mode: {}'.format(config.HEADLESS))
-    print('⚡ Fast mode: {}'.format(config.FAST_MODE))
-    print('📦 Batch size: {}'.format(config.BATCH_SIZE))
-    print('🔄 Max scrolls: {}'.format(config.MAX_SCROLLS))
-    print('⏱️  Scroll delay: {}s'.format(config.SCROLL_DELAY))
-    print()
-    print('📱 Configured URLs:')
-    for i, url in enumerate(config.INSTAGRAM_URLS, 1):
-        print('  {}. {}'.format(i, url))
-    print()
-    print('📈 Google Sheets Rate Limiting:')
-    print('  Max calls/minute: {}'.format(config.SHEETS_MAX_CALLS_PER_MINUTE))
-    print('  Retry attempts: {}'.format(config.SHEETS_RETRY_ATTEMPTS))
-    print('  Base retry delay: {}s'.format(config.SHEETS_BASE_RETRY_DELAY))
-except Exception as e:
-    print('Error reading configuration: {}'.format(e))
-"@
+        # Read config values using simple python commands
+        $urlCount = python -c "import config; print(len(config.INSTAGRAM_URLS))" 2>$null
+        $targetLinks = python -c "import config; print(config.TARGET_LINKS)" 2>$null
+        $daysLimit = python -c "import config; print(config.DAYS_LIMIT)" 2>$null
+        $headless = python -c "import config; print(config.HEADLESS)" 2>$null
+        $fastMode = python -c "import config; print(config.FAST_MODE)" 2>$null
+        $batchSize = python -c "import config; print(config.BATCH_SIZE)" 2>$null
+        $maxScrolls = python -c "import config; print(config.MAX_SCROLLS)" 2>$null
+        $scrollDelay = python -c "import config; print(config.SCROLL_DELAY)" 2>$null
+        
+        Write-Host ""
+        Write-Host "📊 Instagram URLs: $urlCount configured" -ForegroundColor Green
+        Write-Host "🎯 Target links per URL: $targetLinks" -ForegroundColor Green
+        Write-Host "📅 Days limit: $daysLimit days" -ForegroundColor Green
+        Write-Host "👻 Headless mode: $headless" -ForegroundColor Green
+        Write-Host "⚡ Fast mode: $fastMode" -ForegroundColor Green
+        Write-Host "📦 Batch size: $batchSize" -ForegroundColor Green
+        Write-Host "🔄 Max scrolls: $maxScrolls" -ForegroundColor Green
+        Write-Host "⏱️  Scroll delay: ${scrollDelay}s" -ForegroundColor Green
+        
+        Write-Host ""
+        Write-Host "📱 Configured URLs:" -ForegroundColor Cyan
+        
+        $urls = python -c "import config; [print(f'{i+1}. {url}') for i, url in enumerate(config.INSTAGRAM_URLS)]" 2>$null
+        if ($urls) {
+            $urls | ForEach-Object { Write-Host "  $_" -ForegroundColor White }
+        }
+        
+        Write-Host ""
+        Write-Host "📈 Google Sheets Rate Limiting:" -ForegroundColor Cyan
+        
+        $maxCalls = python -c "import config; print(config.SHEETS_MAX_CALLS_PER_MINUTE)" 2>$null
+        $retryAttempts = python -c "import config; print(config.SHEETS_RETRY_ATTEMPTS)" 2>$null
+        $retryDelay = python -c "import config; print(config.SHEETS_BASE_RETRY_DELAY)" 2>$null
+        
+        Write-Host "  Max calls/minute: $maxCalls" -ForegroundColor White
+        Write-Host "  Retry attempts: $retryAttempts" -ForegroundColor White
+        Write-Host "  Base retry delay: ${retryDelay}s" -ForegroundColor White
     }
     catch {
-        Write-Host "Failed to read configuration: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error reading configuration: $_" -ForegroundColor Red
     }
 }
 
-function Invoke-ProcessMissingDescriptions {
+function Start-ProcessMissingDescriptions {
+    Write-Host "🔍 Starting description extraction..." -ForegroundColor Yellow
+    
     try {
-        python -c @"
-from main_processor import InstagramProcessor
-try:
-    print('Starting description extraction...')
-    processor = InstagramProcessor()
-    processor.process_missing_descriptions()
-    print('Description extraction completed successfully!')
-except Exception as e:
-    print('Error during description extraction: {}'.format(e))
-    import traceback
-    traceback.print_exc()
-"@
+        python -c "from main_processor import InstagramProcessor; processor = InstagramProcessor(); processor.process_missing_descriptions()"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Description extraction completed successfully!" -ForegroundColor Green
+        } else {
+            Write-Host "❌ Description extraction failed" -ForegroundColor Red
+        }
     }
     catch {
-        Write-Host "Failed to extract missing descriptions: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error during description extraction: $_" -ForegroundColor Red
     }
 }
 
-function Invoke-ProcessPendingUploads {
+function Start-ProcessPendingUploads {
+    Write-Host "📤 Starting upload process..." -ForegroundColor Yellow
+    
     try {
-        python -c @"
-from main_processor import InstagramProcessor
-try:
-    print('Starting upload process...')
-    processor = InstagramProcessor()
-    processor.process_pending_uploads()
-    print('Upload process completed successfully!')
-except Exception as e:
-    print('Error during upload process: {}'.format(e))
-    import traceback
-    traceback.print_exc()
-"@
+        python -c "from main_processor import InstagramProcessor; processor = InstagramProcessor(); processor.process_pending_uploads()"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Upload process completed successfully!" -ForegroundColor Green
+        } else {
+            Write-Host "❌ Upload process failed" -ForegroundColor Red
+        }
     }
     catch {
-        Write-Host "Failed to process pending uploads: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error during upload process: $_" -ForegroundColor Red
     }
 }
 
-function Invoke-FullWorkflow {
+function Start-FullWorkflow {
+    Write-Host "🔄 Starting full workflow..." -ForegroundColor Yellow
+    
     try {
-        python -c @"
-from main_processor import InstagramProcessor
-try:
-    print('Starting full workflow...')
-    processor = InstagramProcessor()
-    processor.run_full_workflow()
-    print('Full workflow completed successfully!')
-except Exception as e:
-    print('Error during full workflow: {}'.format(e))
-    import traceback
-    traceback.print_exc()
-"@
+        python -c "from main_processor import InstagramProcessor; processor = InstagramProcessor(); processor.run_full_workflow()"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Full workflow completed successfully!" -ForegroundColor Green
+        } else {
+            Write-Host "❌ Full workflow failed" -ForegroundColor Red
+        }
     }
     catch {
-        Write-Host "Failed to run full workflow: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error during full workflow: $_" -ForegroundColor Red
     }
 }
 
-function Get-GoogleSheetsStatus {
+function Show-GoogleSheetsStatus {
+    Write-Host "📊 Checking Google Sheets status..." -ForegroundColor Yellow
+    
     try {
         python -c @"
 from google_sheets_manager import GoogleSheetsManager
-import traceback
-
 try:
     sheets = GoogleSheetsManager()
     all_data = sheets.get_all_data()
     
     if all_data:
-        total_rows = len(all_data) - 1  # Exclude header
-        print('📊 Total reels in sheet: {}'.format(total_rows))
+        total_rows = len(all_data) - 1
+        print(f'📊 Total reels in sheet: {total_rows}')
         
-        # Count by status
         status_counts = {'pending': 0, 'processing': 0, 'completed': 0, 'failed': 0, 'other': 0}
         
-        for row in all_data[1:]:  # Skip header
-            if len(row) > 5:  # Status is in column 6 (index 5)
+        for row in all_data[1:]:
+            if len(row) > 5:
                 status = row[5].lower() if row[5] else 'pending'
                 if status in status_counts:
                     status_counts[status] += 1
                 else:
                     status_counts['other'] += 1
         
-        print()
         print('📈 Status breakdown:')
-        print('  🟡 Pending: {}'.format(status_counts['pending']))
-        print('  🔵 Processing: {}'.format(status_counts['processing']))
-        print('  🟢 Completed: {}'.format(status_counts['completed']))
-        print('  🔴 Failed: {}'.format(status_counts['failed']))
+        print(f'  🟡 Pending: {status_counts["pending"]}')
+        print(f'  🔵 Processing: {status_counts["processing"]}')
+        print(f'  🟢 Completed: {status_counts["completed"]}')
+        print(f'  🔴 Failed: {status_counts["failed"]}')
         if status_counts['other'] > 0:
-            print('  ⚪ Other: {}'.format(status_counts['other']))
+            print(f'  ⚪ Other: {status_counts["other"]}')
         
-        # Recent entries
-        print()
         print('📅 Recent entries (last 5):')
         recent_rows = all_data[-5:] if len(all_data) > 5 else all_data[1:]
         for i, row in enumerate(recent_rows, 1):
@@ -179,23 +181,24 @@ try:
                 username = row[1] if len(row) > 1 else 'N/A'
                 reel_id = row[3] if len(row) > 3 else 'N/A'
                 status = row[5] if len(row) > 5 else 'pending'
-                print('  {}. {} | {} | {} | {}'.format(i, date, username, reel_id, status))
+                print(f'  {i}. {date} | {username} | {reel_id} | {status}')
     else:
         print('⚠️  No data found in Google Sheets')
         
 except Exception as e:
-    print('❌ Error accessing Google Sheets: {}'.format(e))
+    print(f'❌ Error accessing Google Sheets: {e}')
     if 'quota' in str(e).lower():
         print('💡 Tip: Wait a few minutes for quota to reset')
 "@
     }
     catch {
-        Write-Host "Failed to check Google Sheets status: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error checking Google Sheets status: $_" -ForegroundColor Red
     }
 }
 
 function Test-GoogleSheetsConnection {
+    Write-Host "🔗 Testing Google Sheets connection..." -ForegroundColor Yellow
+    
     try {
         python -c @"
 from google_sheets_manager import GoogleSheetsManager
@@ -207,22 +210,22 @@ start_time = time.time()
 try:
     sheets = GoogleSheetsManager()
     connection_time = time.time() - start_time
-    print('✅ Connection successful! ({:.2f}s)'.format(connection_time))
+    print(f'✅ Connection successful! ({connection_time:.2f}s)')
     
     print('📊 Testing data retrieval...')
     all_data = sheets.get_all_data()
     
     if all_data:
-        print('✅ Data retrieval successful! ({} rows)'.format(len(all_data)))
-        print('📋 Headers: {}'.format(all_data[0] if all_data else 'No headers found'))
-        print('🗂️  Cache status: {} URLs cached'.format(len(sheets._url_cache)))
+        print(f'✅ Data retrieval successful! ({len(all_data)} rows)')
+        print(f'📋 Headers: {all_data[0] if all_data else "No headers found"}')
+        print(f'🗂️  Cache status: {len(sheets._url_cache)} URLs cached')
     else:
         print('⚠️  No data retrieved (sheet might be empty)')
     
     print('✅ All tests passed!')
     
 except Exception as e:
-    print('❌ Test failed: {}'.format(e))
+    print(f'❌ Test failed: {e}')
     if 'quota' in str(e).lower():
         print('💡 This is likely a temporary quota limit. Wait and try again.')
     elif 'permission' in str(e).lower():
@@ -232,12 +235,12 @@ except Exception as e:
 "@
     }
     catch {
-        Write-Host "Failed to test Google Sheets connection: $_" -ForegroundColor Red
-        return $null
+        Write-Host "❌ Error during connection test: $_" -ForegroundColor Red
     }
 }
 
 function Remove-DownloadedFiles {
+    Write-Host "🗑️  Cleaning downloaded files..." -ForegroundColor Yellow
     $cleanedItems = @()
     
     # Clean downloaded_reels directory
@@ -248,7 +251,7 @@ function Remove-DownloadedFiles {
             $cleanedItems += "downloaded_reels directory ($fileCount files)"
         }
         catch {
-            Write-Host "Warning: Could not remove some files in downloaded_reels" -ForegroundColor Yellow
+            Write-Host "⚠️  Warning: Could not remove some files in downloaded_reels" -ForegroundColor Yellow
         }
     }
     
@@ -260,7 +263,7 @@ function Remove-DownloadedFiles {
             $cleanedItems += "$($mp4Files.Count) orphaned MP4 files"
         }
         catch {
-            Write-Host "Warning: Could not remove some MP4 files" -ForegroundColor Yellow
+            Write-Host "⚠️  Warning: Could not remove some MP4 files" -ForegroundColor Yellow
         }
     }
     
@@ -272,11 +275,17 @@ function Remove-DownloadedFiles {
             $cleanedItems += "$($jsonFiles.Count) backup JSON files"
         }
         catch {
-            Write-Host "Warning: Could not remove some JSON files" -ForegroundColor Yellow
+            Write-Host "⚠️  Warning: Could not remove some JSON files" -ForegroundColor Yellow
         }
     }
     
-    return $cleanedItems
+    if ($cleanedItems.Count -gt 0) {
+        foreach ($item in $cleanedItems) {
+            Write-Host "✅ Cleaned: $item" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "ℹ️  No files found to clean" -ForegroundColor Yellow
+    }
 }
 
 #endregion
@@ -291,13 +300,13 @@ Write-Host "Checking Python..." -ForegroundColor Yellow
 try {
     $pythonVersion = python --version 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "Python found: $pythonVersion" -ForegroundColor Green
+        Write-Host "✅ Python found: $pythonVersion" -ForegroundColor Green
     } else {
         throw "Python not found"
     }
 }
 catch {
-    Write-Host "ERROR: Python is not installed or not in PATH" -ForegroundColor Red
+    Write-Host "❌ ERROR: Python is not installed or not in PATH" -ForegroundColor Red
     Write-Host "Please install Python and try again." -ForegroundColor Yellow
     Read-Host "Press Enter to exit"
     exit 1
@@ -310,25 +319,25 @@ $missingFiles = @()
 
 foreach ($file in $requiredFiles) {
     if (Test-Path $file) {
-        Write-Host "Found: $file" -ForegroundColor Green
+        Write-Host "✅ Found: $file" -ForegroundColor Green
     } else {
-        Write-Host "Missing: $file" -ForegroundColor Red
+        Write-Host "❌ Missing: $file" -ForegroundColor Red
         $missingFiles += $file
     }
 }
 
 if ($missingFiles.Count -gt 0) {
     Write-Host ""
-    Write-Host "ERROR: Missing required files. Cannot continue." -ForegroundColor Red
+    Write-Host "❌ ERROR: Missing required files. Cannot continue." -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
 
 Write-Host ""
-Write-Host "All checks passed!" -ForegroundColor Green
+Write-Host "✅ All checks passed!" -ForegroundColor Green
 Write-Host ""
 
-# Simple menu
+# Main menu loop
 do {
     Write-Host "Select what you want to do:" -ForegroundColor White
     Write-Host ""
@@ -355,101 +364,86 @@ do {
     switch ($choice) {
         "1" {
             Write-Host ""
-            Write-Host "Starting Instagram Scraper (Full Mode)..." -ForegroundColor Green
+            Write-Host "🚀 Starting Instagram Scraper (Full Mode)..." -ForegroundColor Green
             Write-Host "This will scrape with full date checking enabled." -ForegroundColor White
             Write-Host ""
             python run_scraper.py
             Write-Host ""
-            Write-Host "Scraper finished!" -ForegroundColor Green
+            Write-Host "✅ Scraper finished!" -ForegroundColor Green
             Read-Host "Press Enter to continue"
         }
 
         "2" {
             Write-Host ""
-            Write-Host "Starting Instagram Scraper (Fast Mode)..." -ForegroundColor Yellow
+            Write-Host "⚡ Starting Instagram Scraper (Fast Mode)..." -ForegroundColor Yellow
             Write-Host "This will skip date checking for faster scraping." -ForegroundColor White
             Write-Host ""
             $env:SKIP_DATE_CHECKING = "True"
             python run_scraper.py
             Remove-Item Env:SKIP_DATE_CHECKING -ErrorAction SilentlyContinue
             Write-Host ""
-            Write-Host "Scraper finished!" -ForegroundColor Green
+            Write-Host "✅ Scraper finished!" -ForegroundColor Green
             Read-Host "Press Enter to continue"
         }
 
         "3" {
             Write-Host ""
-            Write-Host "Extracting Missing Descriptions..." -ForegroundColor Blue
+            Write-Host "📝 Extracting Missing Descriptions..." -ForegroundColor Blue
             Write-Host "This will only extract descriptions for reels that don't have them." -ForegroundColor White
             Write-Host ""
-            Invoke-ProcessMissingDescriptions
+            Start-ProcessMissingDescriptions
             Write-Host ""
-            Write-Host "Description extraction finished!" -ForegroundColor Green
             Read-Host "Press Enter to continue"
         }
 
         "4" {
             Write-Host ""
-            Write-Host "Uploading Pending Videos to Google Drive..." -ForegroundColor Magenta
+            Write-Host "📤 Uploading Pending Videos to Google Drive..." -ForegroundColor Magenta
             Write-Host "This will upload all pending reels to Google Drive." -ForegroundColor White
             Write-Host ""
-            Invoke-ProcessPendingUploads
+            Start-ProcessPendingUploads
             Write-Host ""
-            Write-Host "Upload process finished!" -ForegroundColor Green
             Read-Host "Press Enter to continue"
         }
 
         "5" {
             Write-Host ""
-            Write-Host "Running Full Processing Workflow (No Scraping)..." -ForegroundColor White
+            Write-Host "🔄 Running Full Processing Workflow (No Scraping)..." -ForegroundColor White
             Write-Host "This will process existing reels: descriptions + uploads + cleanup." -ForegroundColor White
             Write-Host ""
-            Invoke-FullWorkflow
+            Start-FullWorkflow
             Write-Host ""
-            Write-Host "Processing workflow finished!" -ForegroundColor Green
             Read-Host "Press Enter to continue"
         }
 
         "6" {
             Write-Host ""
-            Write-Host "Current Configuration:" -ForegroundColor Blue
+            Write-Host "⚙️  Current Configuration:" -ForegroundColor Blue
             Write-Host ""
-            Get-ConfigDisplay
+            Show-ConfigDisplay
             Write-Host ""
             Read-Host "Press Enter to continue"
         }
 
         "7" {
             Write-Host ""
-            Write-Host "Checking Google Sheets Status..." -ForegroundColor Green
+            Write-Host "📊 Checking Google Sheets Status..." -ForegroundColor Green
             Write-Host ""
-            Get-GoogleSheetsStatus
+            Show-GoogleSheetsStatus
             Write-Host ""
             Read-Host "Press Enter to continue"
         }
 
         "8" {
             Write-Host ""
-            Write-Host "Cleaning downloaded files..." -ForegroundColor Red
-            
-            $cleanedItems = Remove-DownloadedFiles
-            
-            if ($cleanedItems.Count -gt 0) {
-                foreach ($item in $cleanedItems) {
-                    Write-Host "Cleaned: $item" -ForegroundColor Green
-                }
-            } else {
-                Write-Host "No files found to clean" -ForegroundColor Yellow
-            }
-            
-            Write-Host "Cleanup completed!" -ForegroundColor Green
+            Remove-DownloadedFiles
+            Write-Host ""
+            Write-Host "✅ Cleanup completed!" -ForegroundColor Green
             Write-Host ""
             Read-Host "Press Enter to continue"
         }
 
         "9" {
-            Write-Host ""
-            Write-Host "Testing Google Sheets Connection..." -ForegroundColor Yellow
             Write-Host ""
             Test-GoogleSheetsConnection
             Write-Host ""
@@ -458,13 +452,13 @@ do {
 
         "0" {
             Write-Host ""
-            Write-Host "Thank you for using Instagram Reel Scraper!" -ForegroundColor Cyan
+            Write-Host "👋 Thank you for using Instagram Reel Scraper!" -ForegroundColor Cyan
             exit 0
         }
 
         default {
             Write-Host ""
-            Write-Host "Invalid choice. Please enter 0-9." -ForegroundColor Red
+            Write-Host "❌ Invalid choice. Please enter 0-9." -ForegroundColor Red
             Write-Host ""
         }
     }
