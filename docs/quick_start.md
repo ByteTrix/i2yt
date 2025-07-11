@@ -64,28 +64,71 @@ USE_FAST_MODE = True         # Headless mode
 2. Share it with the email from your `credentials.json` (give Editor access)
 3. Copy the ID from the URL: `https://docs.google.com/spreadsheets/d/SHEET_ID_HERE/edit`
 
-### 4. Setup Instagram Login
+### 4. Setup Instagram Authentication
 
 ```bash
-# Run the login helper
+# Run the login helper (Windows)
 login_to_instagram.bat
+
+# Or manually setup:
+# 1. Export your Instagram cookies to 'cookies.txt'
+# 2. Use a browser extension like "Get cookies.txt"
+# 3. Place the file in the project root
 ```
 
-This will:
-1. Open Chrome with a dedicated profile
-2. Navigate to Instagram
-3. **You manually log in** to your Instagram account
-4. **Close the browser** when done - your session is saved
+**For Windows users:**
+1. Run `login_to_instagram.bat`
+2. A Chrome window will open with a dedicated profile
+3. Navigate to Instagram and log in manually
+4. Close the browser when done - your session is saved
+5. The scraper will use this saved session for future runs
+
+**For manual cookie setup:**
+1. Install a "Get cookies.txt" browser extension
+2. Navigate to Instagram and log in
+3. Export cookies to `cookies.txt` 
+4. Place the file in your project directory
 
 ### 5. Run Your First Scrape
 
+You have multiple options to run the scraper:
+
+#### Option A: Python Command Line
 ```bash
-# Basic run
+# Basic run - collect reels only
 python run_scraper.py
 
-# Or with options
-python run_scraper.py --fast --days 3 --limit 10
+# Run complete workflow (scraping + descriptions + uploads)
+python run_scraper.py --full
+
+# Extract descriptions for existing reels
+python run_scraper.py --descriptions
+
+# Upload existing reels to Google Drive
+python run_scraper.py --uploads
 ```
+
+#### Option B: PowerShell Script (Windows)
+```powershell
+# Navigate to project directory first
+cd "C:\path\to\your\i2yt"
+.\run_scraper.ps1
+```
+
+#### Option C: Windows Batch Launcher
+1. **IMPORTANT**: First edit `Launch_Instagram_Scraper.bat`
+2. Update the path in line 11 to match your project location:
+   ```batch
+   start wt -p "PowerShell" --title "Instagram Reel Scraper" pwsh -NoExit -ExecutionPolicy Bypass -File "C:\your\path\to\i2yt\run_scraper.ps1"
+   ```
+3. Double-click the batch file to run
+
+The PowerShell script provides an interactive menu with options:
+- 🔗 Scrape Instagram links only
+- 📝 Extract descriptions only  
+- ☁️ Upload to Google Drive only
+- 🚀 Run complete workflow
+- 📊 Check Google Sheets status
 
 ## What Happens Next
 

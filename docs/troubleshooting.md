@@ -20,6 +20,75 @@ python run_scraper.py --verbose --debug
 
 ## Common Issues by Category
 
+### 0. Windows Launcher Issues
+
+#### Batch File Path Errors
+
+**Problem**: "The system cannot find the file specified" when running `Launch_Instagram_Scraper.bat`
+```
+[error 2147942402 (0x80070002) when launching `".\run_scraper.ps1"`]
+The system cannot find the file specified.
+```
+
+**Solutions**:
+
+1. **Update the Batch File Path**:
+   - Open `Launch_Instagram_Scraper.bat` in a text editor
+   - Find line 11 with the hardcoded path:
+     ```batch
+     start wt -p "PowerShell" --title "Instagram Reel Scraper" pwsh -NoExit -ExecutionPolicy Bypass -File "d:\Kodo\i2yt\run_scraper.ps1"
+     ```
+   - Replace `"d:\Kodo\i2yt\run_scraper.ps1"` with your actual project path:
+     ```batch
+     start wt -p "PowerShell" --title "Instagram Reel Scraper" pwsh -NoExit -ExecutionPolicy Bypass -File "C:\Users\YourName\Documents\i2yt\run_scraper.ps1"
+     ```
+
+2. **Alternative: Use Relative Path**:
+   - Place the batch file in your project directory
+   - Use this command instead:
+     ```batch
+     start wt -p "PowerShell" --title "Instagram Reel Scraper" pwsh -NoExit -ExecutionPolicy Bypass -Command "Set-Location '%~dp0'; .\run_scraper.ps1"
+     ```
+
+#### PowerShell Execution Policy Issues
+
+**Problem**: PowerShell script blocked by execution policy
+```
+cannot be loaded because running scripts is disabled on this system
+```
+
+**Solutions**:
+```powershell
+# Temporarily allow script execution (Administrator PowerShell)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Or run with bypass (safer)
+pwsh -ExecutionPolicy Bypass -File ".\run_scraper.ps1"
+```
+
+#### Windows Terminal Not Found
+
+**Problem**: `wt` command not recognized
+```
+'wt' is not recognized as an internal or external command
+```
+
+**Solutions**:
+1. **Install Windows Terminal**:
+   ```powershell
+   # Via Microsoft Store
+   # Search for "Windows Terminal" and install
+   
+   # Via winget
+   winget install Microsoft.WindowsTerminal
+   ```
+
+2. **Alternative: Use regular PowerShell**:
+   - Modify the batch file to use regular PowerShell:
+     ```batch
+     start powershell -NoExit -ExecutionPolicy Bypass -File "C:\your\path\to\run_scraper.ps1"
+     ```
+
 ### 1. Installation and Setup Issues
 
 #### Python Dependencies
@@ -98,9 +167,10 @@ Login failed: Please check your credentials
 
 2. **Manual Profile Setup**:
    ```bash
-   # Start Chrome with profile
-   start_chrome_debug.bat
+   # Use the login helper script
+   login_to_instagram.bat
    
+   # Or start Chrome manually with profile
    # Navigate to instagram.com
    # Log in manually
    # Close browser
@@ -231,7 +301,106 @@ googleapiclient.errors.HttpError: 429 Quota exceeded
    - Check Google Cloud Console quota usage
    - Request quota increase if needed
 
-### 4. Browser and Selenium Issues
+### 4. Google Drive API Issues
+
+#### Service Account Storage Quota Error
+
+**Problem**: Service accounts don't have storage quota
+```
+HttpError 403: Service Accounts do not have storage quota. Leverage shared drives 
+(https://developers.google.com/workspace/drive/api/guides/about-shareddrives), 
+or use OAuth delegation instead.
+```
+
+**Root Cause**: Service accounts cannot upload files to their own Google Drive because they don't have allocated storage space.
+
+**Solutions**:
+
+1. **Use Shared Drive (Recommended)**:
+   ```python
+   # In config.py
+   USE_SHARED_DRIVE = True
+   SHARED_DRIVE_ID = "your_shared_drive_id"  # Get this from shared drive URL
+   DRIVE_FOLDER_ID = "folder_id_in_shared_drive"
+   ```
+   
+   Setup steps:
+   - Create a Shared Drive (Google Workspace accounts only)
+   - Add your service account as a member with "Content Manager" role
+   - Create a folder in the shared drive for uploads
+   - Use the folder ID in your config
+
+2. **Share Regular Drive Folder with Service Account**:
+   ```python
+   # In config.py
+   USE_SHARED_DRIVE = False
+   DRIVE_FOLDER_ID = "your_personal_folder_id"
+   ```
+   
+   Setup steps:
+   - Create a folder in your personal Google Drive
+   - Right-click → Share
+   - Add your service account email with "Editor" permissions
+   - Use this folder ID in your config
+
+3. **Use OAuth (User Authentication)**:
+   ```python
+   # In config.py
+   USE_OAUTH_INSTEAD_OF_SERVICE_ACCOUNT = True
+   OAUTH_CREDENTIALS_FILE = "oauth_credentials.json"
+   ```
+   
+   This requires user interaction for initial authentication but provides access to user's storage quota.
+
+4. **Disable Google Drive Upload (Temporary)**:
+   ```python
+   # In config.py
+   UPLOAD_TO_GOOGLE_DRIVE = False
+   # Files will be downloaded locally only
+   ```
+
+#### Folder Not Found Error
+
+**Problem**: Cannot access specified folder
+```
+HttpError 404: File not found
+```
+
+**Solutions**:
+
+1. **Verify Folder ID**:
+   - Copy folder ID from Google Drive URL
+   - Ensure folder is shared with service account
+   - Test folder access with direct API call
+
+2. **Check Permissions**:
+   - Service account needs "Editor" or "Content Manager" role
+   - Folder must be explicitly shared, inheritance isn't always sufficient
+
+#### Upload Timeout Issues
+
+**Problem**: Large file uploads failing
+```
+socket.timeout: The read operation timed out
+```
+
+**Solutions**:
+
+1. **Increase Timeouts**:
+   ```python
+   # In config.py
+   UPLOAD_TIMEOUT = 300  # 5 minutes for large files
+   UPLOAD_RETRY_ATTEMPTS = 3
+   RESUMABLE_UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+   ```
+
+2. **Enable Resumable Uploads**:
+   ```python
+   USE_RESUMABLE_UPLOAD = True
+   UPLOAD_CHUNK_SIZE = 262144  # 256KB chunks for better reliability
+   ```
+
+### 5. Browser and Selenium Issues
 
 #### Browser Crashes
 
@@ -322,82 +491,6 @@ Profile appears to be in use by another process
    # In config.py
    USE_TEMP_PROFILE = True
    CLEAN_PROFILE_ON_EXIT = True
-   ```
-
-### 5. Scraping and Data Issues
-
-#### No Reels Found
-
-**Problem**: Scraper finds no reels
-```
-INFO: No reels found for account: @username
-```
-
-**Solutions**:
-
-1. **Check Account Access**:
-   - Verify account is public
-   - Check if account exists
-   - Ensure reels are available
-
-2. **Adjust Date Range**:
-   ```python
-   # In config.py
-   DAYS_TO_SCRAPE = 0  # All time instead of recent
-   ```
-
-3. **Debug Selectors**:
-   ```python
-   # Enable debug mode
-   DEBUG_MODE = True
-   SAVE_SCREENSHOTS = True
-   ```
-
-#### Duplicate Detection Issues
-
-**Problem**: Same reels being added multiple times
-```
-WARNING: Duplicate reel detected but still added
-```
-
-**Solutions**:
-
-1. **Check Duplicate Logic**:
-   ```python
-   # In config.py
-   STRICT_DUPLICATE_CHECK = True
-   CHECK_DUPLICATES_BY_ID = True
-   ```
-
-2. **Clear Existing Data**:
-   ```python
-   # Remove duplicates manually
-   REMOVE_EXISTING_DUPLICATES = True
-   ```
-
-#### Date Parsing Errors
-
-**Problem**: Can't parse reel dates
-```
-ERROR: Unable to parse date format
-```
-
-**Solutions**:
-
-1. **Update Date Formats**:
-   ```python
-   # In config.py
-   DATE_FORMATS = [
-       "%d-%b-%y",
-       "%Y-%m-%d",
-       "%m/%d/%Y",
-       "%d.%m.%Y"
-   ]
-   ```
-
-2. **Use Current Date Fallback**:
-   ```python
-   USE_CURRENT_DATE_FALLBACK = True
    ```
 
 ### 6. Performance Issues

@@ -110,6 +110,23 @@ DRIVE_FOLDER_ID = ""                 # 📁 Google Drive folder ID (empty = root
 DRIVE_CREDENTIALS_FILE = "credentials.json"  # 🔑 Service account credentials
 DELETE_LOCAL_AFTER_UPLOAD = True     # 🗑️  Clean up local files post-upload
 
+# ⚠️  IMPORTANT: Service Account Storage Limitation
+# Service accounts cannot upload to their own Google Drive due to quota limits.
+# Choose one of these solutions:
+
+# 🏢 Option 1: Shared Drive (Google Workspace only)
+USE_SHARED_DRIVE = False             # Set to True if using Workspace Shared Drive
+SHARED_DRIVE_ID = ""                 # Required when USE_SHARED_DRIVE = True
+
+# 👤 Option 2: Personal Drive Folder  
+# Share a personal folder with your service account email (Editor permissions)
+
+# ⚙️ Advanced Upload Settings
+UPLOAD_TIMEOUT = 300                 # Upload timeout in seconds (5 minutes)
+UPLOAD_RETRY_ATTEMPTS = 3            # Number of retry attempts for failed uploads
+USE_RESUMABLE_UPLOAD = True          # Enable resumable uploads for large files
+UPLOAD_CHUNK_SIZE = 262144           # Upload chunk size in bytes (256KB)
+
 # ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║                       🔧 ADVANCED CONFIGURATION                          ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝

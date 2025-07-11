@@ -19,42 +19,87 @@ INSTAGRAM_URLS = [
 ]
 
 # Google Sheets configuration (REQUIRED)
-SPREADSHEET_ID = "1abcd1234efgh5678ijklmnop-your-sheet-id"
-WORKSHEET_NAME = "Instagram Reels"  # Sheet tab name
+GOOGLE_SHEETS_ID = "1abcd1234efgh5678ijklmnop-your-sheet-id"
 CREDENTIALS_FILE = "credentials.json"  # Google API credentials
+
+# Scraping limits and performance
+TARGET_LINKS = 50                    # Number of reels per URL (0 = unlimited)
+DAYS_LIMIT = 30                      # Only collect reels from last N days
 ```
 
 ### Basic Scraping Settings
 
 ```python
-# Date filtering
-DAYS_TO_SCRAPE = 30  # Scrape reels from last 30 days (0 = all time)
+# Performance and timing
+SCROLL_DELAY = 0.5                   # Delay between scrolls (seconds)
+IMPLICIT_WAIT = 5                    # Browser element wait time (seconds)
+PAGE_LOAD_TIMEOUT = 20               # Maximum page load time (seconds)
+HEADLESS = False                     # False = visible browser, True = hidden
+FAST_MODE = True                     # Enable performance optimizations
 
-# Limits
-MAX_REELS_PER_ACCOUNT = 50  # Maximum reels to collect per account (0 = unlimited)
-TARGET_LINKS = 100  # Total target across all accounts (0 = unlimited)
+# Collection behavior
+MAX_SCROLLS = 15                     # Maximum page scrolls per Instagram URL
+BATCH_SIZE = 25                      # Save to Google Sheets every N links
 
-# Performance
-USE_FAST_MODE = True   # Enable headless mode for faster scraping
-BATCH_SIZE = 25        # Save to sheets every N new reels
-MAX_SCROLLS = 15       # Maximum scroll attempts per account
+# Processing options
+EXTRACT_DESCRIPTIONS = True          # Extract and format reel descriptions
+UPLOAD_TO_GOOGLE_DRIVE = False       # Enable Google Drive video uploads
+ENABLE_CONCURRENT_PROCESSING = True  # Use parallel processing for speed
 ```
 
 ## Advanced Configuration
+
+### Parallel Processing Configuration
+
+```python
+# Advanced Parallel Processing Settings
+MAX_SCRAPING_WORKERS = 4             # Concurrent threads for link processing
+MAX_DOWNLOAD_WORKERS = 3             # Concurrent download threads  
+MAX_UPLOAD_WORKERS = 2               # Concurrent upload threads (be conservative)
+MAX_DESCRIPTION_WORKERS = 5          # Concurrent description extraction threads
+BATCH_PROCESSING_SIZE = 20           # Items per batch for parallel operations
+WORKER_TIMEOUT = 60                  # Timeout per worker task (seconds)
+
+# Download Configuration
+DOWNLOAD_DIRECTORY = "downloaded_reels"  # Local storage directory
+DOWNLOAD_TIMEOUT = 30                # Download timeout per file (seconds)
+RETRY_FAILED_DOWNLOADS = 2           # Number of retry attempts for failures
+DELETE_LOCAL_AFTER_UPLOAD = True     # Clean up local files post-upload
+```
+
+### Google Drive Integration
+
+```python
+# Google Drive settings
+UPLOAD_TO_GOOGLE_DRIVE = False       # Set to True to enable video uploads
+DRIVE_FOLDER_ID = ""                 # Google Drive folder ID (empty = root)
+DRIVE_CREDENTIALS_FILE = "credentials.json"  # Service account credentials
+
+# Advanced Google Drive settings
+USE_SHARED_DRIVE = False             # Set to True if using Google Workspace Shared Drive
+SHARED_DRIVE_ID = ""                 # Required if USE_SHARED_DRIVE = True
+UPLOAD_TIMEOUT = 300                 # Upload timeout in seconds (5 minutes)
+UPLOAD_RETRY_ATTEMPTS = 3            # Number of retry attempts for failed uploads
+USE_RESUMABLE_UPLOAD = True          # Enable resumable uploads for large files
+UPLOAD_CHUNK_SIZE = 262144           # Upload chunk size (256KB)
+```
+
+**Important Notes:**
+- **Service Account Limitation**: Service accounts don't have storage quota and cannot upload to their own Drive
+- **Shared Drive Solution**: Use Google Workspace Shared Drives for service account uploads
+- **Personal Drive Alternative**: Share a personal folder with your service account email (Editor permissions)
+- **OAuth Alternative**: Use user authentication instead of service accounts for personal Drive access
 
 ### Chrome Browser Settings
 
 ```python
 # Chrome profile and behavior
-CHROME_PROFILE_PATH = "./instagram_profile"  # Where to store login session
-HEADLESS_MODE = False  # True for no browser window (overridden by fast mode)
-CHROME_BINARY_PATH = None  # Custom Chrome path (None = auto-detect)
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+BROWSER_DEBUG_PORT = 9222            # Chrome debug port for troubleshooting
 
 # Browser optimization
-ENABLE_IMAGES = False      # Load images (False = faster)
+ENABLE_IMAGES = False      # Load images (False = faster) - if supported
 ENABLE_JAVASCRIPT = True   # Enable JS (required for Instagram)
-PAGE_LOAD_TIMEOUT = 30     # Seconds to wait for page load
-ELEMENT_TIMEOUT = 10       # Seconds to wait for elements
 ```
 
 ### Scrolling and Collection Behavior
@@ -112,7 +157,6 @@ CHROME_BINARY_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 
 # Windows batch files
 LOGIN_SCRIPT = "login_to_instagram.bat"
-DEBUG_SCRIPT = "start_chrome_debug.bat"
 ```
 
 ### Linux/Mac Configuration
@@ -124,7 +168,6 @@ CHROME_BINARY_PATH = "/usr/bin/google-chrome"  # or "/Applications/Google Chrome
 
 # Unix shell scripts (if using)
 LOGIN_SCRIPT = "login_to_instagram.sh"
-DEBUG_SCRIPT = "start_chrome_debug.sh"
 ```
 
 ### Docker Configuration

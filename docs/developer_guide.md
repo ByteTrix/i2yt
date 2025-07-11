@@ -93,29 +93,40 @@ Complete guide for developers who want to understand, modify, or contribute to t
 
 ```
 project_root/
-├── instagram_reel_scraper.py    # Core scraper implementation
+├── instagram_scraper.py          # Main scraper implementation
+├── instagram_scraper_clean.py    # Alternative clean scraper
 ├── run_scraper.py               # CLI interface
+├── run_scraper.ps1              # PowerShell interactive script (Windows)
 ├── config_template.py           # Configuration template
 ├── config.py                    # User configuration (gitignored)
+├── setup.py                     # Automated setup script
+├── description_extractor.py     # Description extraction logic
+├── google_drive_manager.py      # Google Drive integration
+├── google_sheets_manager.py     # Google Sheets management
+├── main_processor.py            # Workflow orchestration
+├── parallel_processor.py        # Concurrent processing
+├── Launch_Instagram_Scraper.bat # Windows batch launcher
+├── login_to_instagram.bat       # Instagram login helper
+├── n8n_workflow.json           # n8n automation template
 ├── tests/                       # Test files
 │   ├── test_google_api.py
 │   ├── test_sheets.py
 │   └── demo.py
 ├── docs/                        # Documentation
 │   ├── quick_start.md
+│   ├── running_guide.md
 │   ├── configuration.md
 │   ├── google_sheets_setup.md
 │   ├── n8n_integration.md
 │   ├── troubleshooting.md
 │   ├── advanced_usage.md
-│   └── developer_guide.md
+│   ├── developer_guide.md
+│   └── technical_sheets_permissions.md
 ├── .github/workflows/           # CI/CD pipelines
 │   └── download.yml
-├── login_to_instagram.bat       # Login helper script
-├── start_chrome_debug.bat       # Debug helper script
 ├── requirements.txt             # Python dependencies
-├── setup.py                     # Package configuration
-├── insta to yt.json            # n8n workflow template
+├── downloaded_reels/            # Local video storage (auto-created)
+├── instagram_profile/           # Chrome profile data
 └── README.md                    # Main documentation
 ```
 

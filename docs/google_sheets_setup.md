@@ -143,6 +143,70 @@ Expected output:
 ✓ Test data written and read successfully
 ```
 
+### Phase 5: Google Drive Setup (Optional)
+
+**⚠️ Important**: Service accounts have a storage quota limitation that prevents direct uploads to their own Google Drive.
+
+#### Option 1: Shared Drive (Recommended for Organizations)
+
+**Requirements**: Google Workspace account
+
+1. **Create Shared Drive**:
+   - Go to [Google Drive](https://drive.google.com)
+   - Click "Shared drives" in sidebar
+   - Click "New shared drive"
+   - Name it: `Instagram Automation`
+
+2. **Add Service Account as Member**:
+   - Open the shared drive
+   - Click "Manage members"
+   - Add your service account email
+   - Set role to "Content manager"
+
+3. **Create Upload Folder**:
+   - Create a folder inside the shared drive: `Downloaded Reels`
+   - Copy the folder ID from URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+
+4. **Update Configuration**:
+   ```python
+   # In config.py
+   UPLOAD_TO_GOOGLE_DRIVE = True
+   USE_SHARED_DRIVE = True
+   SHARED_DRIVE_ID = "your_shared_drive_id"
+   DRIVE_FOLDER_ID = "your_folder_id_in_shared_drive"
+   ```
+
+#### Option 2: Personal Drive Folder (Individual Users)
+
+1. **Create Upload Folder**:
+   - Go to [Google Drive](https://drive.google.com)
+   - Create new folder: `Instagram Reels`
+   - Copy folder ID from URL
+
+2. **Share Folder with Service Account**:
+   - Right-click folder → "Share"
+   - Add service account email: `your-service@project.iam.gserviceaccount.com`
+   - Set permission to "Editor"
+   - Click "Share"
+
+3. **Update Configuration**:
+   ```python
+   # In config.py
+   UPLOAD_TO_GOOGLE_DRIVE = True
+   USE_SHARED_DRIVE = False
+   DRIVE_FOLDER_ID = "your_personal_folder_id"
+   ```
+
+#### Option 3: Disable Google Drive (Local Storage Only)
+
+If you don't need Google Drive uploads:
+
+```python
+# In config.py
+UPLOAD_TO_GOOGLE_DRIVE = False
+# Videos will be downloaded to 'downloaded_reels' folder only
+```
+
 ## Advanced Configuration
 
 ### Multiple Worksheets
