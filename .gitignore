@@ -56,3 +56,4 @@ dist/
 *.egg-info/
 .eggs/
 cookies.txt
+token.pickle

@@ -111,7 +111,7 @@ function Start-ProcessPendingUploads {
     Write-Host "📤 Starting upload process..." -ForegroundColor Yellow
     
     try {
-        python -c "from main_processor import InstagramProcessor; processor = InstagramProcessor(); processor.process_pending_uploads()"
+        python -c "from main_processor import InstagramProcessor; processor = InstagramProcessor(); processor.process_pending_uploads_workflow()"
         
         if ($LASTEXITCODE -eq 0) {
             Write-Host "✅ Upload process completed successfully!" -ForegroundColor Green

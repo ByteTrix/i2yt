@@ -13,6 +13,10 @@ import random
 # Google Sheets imports
 import gspread
 from google.oauth2.service_account import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
+import os
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -89,32 +93,109 @@ class GoogleSheetsManager:
         self.setup_sheets_client()
     
     def setup_sheets_client(self):
-        """Setup Google Sheets client"""
+        """Setup Google Sheets client using shared OAuth2 credentials with Drive"""
         try:
-            # Define the scope
+            # Define the scope - include both Drive and Sheets
             scopes = [
-                'https://www.googleapis.com/auth/spreadsheets'
+                'https://www.googleapis.com/auth/spreadsheets',
+                'https://www.googleapis.com/auth/drive'  # Include drive scope for shared auth
             ]
             
-            # Load credentials
-            credentials = Credentials.from_service_account_file(
-                self.credentials_file, 
-                scopes=scopes
-            )
+            creds = None
+            token_file = 'token.pickle'  # Use the same token file as Google Drive
             
-            # Initialize gspread client
-            self.gc = gspread.authorize(credentials)
+            # Load existing token if it exists
+            if os.path.exists(token_file):
+                with open(token_file, 'rb') as token:
+                    creds = pickle.load(token)
+                    
+                # Check if the token has the required scopes
+                if creds and creds.valid:
+                    # Check if we have the sheets scope
+                    if 'https://www.googleapis.com/auth/spreadsheets' in creds.scopes:
+                        self.logger.info("✅ Using existing OAuth2 token with Sheets scope")
+                    else:
+                        self.logger.warning("⚠️  Existing token doesn't have Sheets scope, need re-authentication")
+                        creds = None
+            
+            # If there are no (valid) credentials available, let the user log in
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    # Try to refresh the token
+                    try:
+                        creds.refresh(Request())
+                        self.logger.info("Google Sheets token refreshed successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Sheets token refresh failed: {e}. Requesting new authorization.")
+                        creds = None
+                
+                if not creds:
+                    # Check if credentials file exists and is valid OAuth2 credentials
+                    if not os.path.exists(self.credentials_file):
+                        raise FileNotFoundError(
+                            f"OAuth2 credentials file not found: {self.credentials_file}\n"
+                            "Please create OAuth2 credentials from Google Cloud Console"
+                        )
+                    
+                    self.logger.info("🔐 Need to re-authenticate with expanded scopes (Drive + Sheets)")
+                    self.logger.info("📝 This will replace your existing token with one that includes Sheets access")
+                    
+                    # Check if this is a web client (which needs different handling)
+                    import json
+                    with open(self.credentials_file, 'r') as f:
+                        cred_data = json.load(f)
+                    
+                    if 'web' in cred_data:
+                        # Use web client flow
+                        self.logger.info("🔐 Detected web client credentials, using appropriate flow...")
+                        flow = InstalledAppFlow.from_client_config(
+                            cred_data, scopes)
+                        # For web clients, we need to use a different redirect URI
+                        flow.redirect_uri = 'http://localhost:8080/'  # Use same port as Drive
+                    else:
+                        # Use installed app flow
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            self.credentials_file, scopes)
+                    
+                    # Try to run with a specific port first, fallback to no browser if needed
+                    try:
+                        self.logger.info("🔐 Starting OAuth2 authorization with Drive + Sheets scopes...")
+                        self.logger.info("📱 A web browser will open for Google sign-in")
+                        creds = flow.run_local_server(port=8080, open_browser=True)  # Same port as Drive
+                        self.logger.info("✅ OAuth2 authorization completed with expanded scopes")
+                    except Exception as browser_error:
+                        self.logger.warning(f"⚠️  Browser flow failed: {browser_error}")
+                        self.logger.info("🔗 Trying console-based authentication...")
+                        creds = flow.run_console()
+                        self.logger.info("✅ Console-based OAuth2 authorization completed")
+                
+                # Save the credentials for the next run (this will replace the Drive-only token)
+                with open(token_file, 'wb') as token:
+                    pickle.dump(creds, token)
+                    self.logger.info("OAuth2 token updated with Drive + Sheets scopes")
+            
+            # Initialize gspread client with OAuth2 credentials
+            self.gc = gspread.authorize(creds)
             
             # Open the worksheet
             self.worksheet = self.gc.open_by_key(self.sheets_id).sheet1
             
-            self.logger.info("Google Sheets client initialized successfully")
+            self.logger.info("Google Sheets client initialized successfully with OAuth2")
             
             # Ensure headers exist
             self.ensure_headers()
             
         except Exception as e:
             self.logger.error(f"Failed to setup Google Sheets client: {str(e)}")
+            
+            # Provide helpful error message for common issues
+            if "redirect_uri_mismatch" in str(e):
+                self.logger.error("🚨 REDIRECT URI MISMATCH ERROR!")
+                self.logger.error("💡 Your OAuth2 credentials are configured correctly.")
+                self.logger.error("   Try deleting the token.pickle file and re-authenticating:")
+                self.logger.error("   1. Delete token.pickle")
+                self.logger.error("   2. Run the script again")
+                self.logger.error("   3. Sign in when prompted")
             raise
     
     def ensure_headers(self):

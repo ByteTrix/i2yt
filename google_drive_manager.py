@@ -19,6 +19,9 @@ from pathlib import Path
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaFileUpload
 from google.oauth2.service_account import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
 from tqdm import tqdm
 from googleapiclient.errors import HttpError
 import requests
@@ -58,21 +61,91 @@ class GoogleDriveManager:
             subprocess.run(['pip', 'install', 'yt-dlp'], check=True)
     
     def setup_drive_service(self):
-        """Setup Google Drive API service with updated authentication"""
+        """Setup Google Drive API service with OAuth2 authentication"""
         try:
-            # Define the scope
-            scopes = ['https://www.googleapis.com/auth/drive']
+            # Define the scope - include both Drive and Sheets for unified authentication
+            scopes = [
+                'https://www.googleapis.com/auth/drive',
+                'https://www.googleapis.com/auth/spreadsheets'
+            ]
             
-            # Load credentials
-            credentials = Credentials.from_service_account_file(
-                self.credentials_file, 
-                scopes=scopes
-            )
+            creds = None
+            token_file = 'token.pickle'
             
-            # Build service directly with credentials (new method)
-            self.service = build('drive', 'v3', credentials=credentials, cache_discovery=False)
+            # Load existing token if it exists
+            if os.path.exists(token_file):
+                with open(token_file, 'rb') as token:
+                    creds = pickle.load(token)
             
-            self.logger.info("Google Drive service initialized successfully")
+            # If there are no (valid) credentials available, let the user log in
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    # Try to refresh the token
+                    try:
+                        creds.refresh(Request())
+                        self.logger.info("Google Drive token refreshed successfully")
+                    except Exception as e:
+                        self.logger.warning(f"Token refresh failed: {e}. Requesting new authorization.")
+                        creds = None
+                
+                if not creds:
+                    # Check if credentials file exists and is valid OAuth2 credentials
+                    if not os.path.exists(self.credentials_file):
+                        raise FileNotFoundError(
+                            f"OAuth2 credentials file not found: {self.credentials_file}\n"
+                            "Please create OAuth2 credentials from Google Cloud Console:\n"
+                            "1. Go to https://console.cloud.google.com/\n"
+                            "2. Enable the Google Drive API\n"
+                            "3. Create OAuth2 credentials (not service account)\n"
+                            "4. Download the credentials as 'credentials.json'"
+                        )
+                    
+                    # Start OAuth2 flow with proper redirect URI handling
+                    try:
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            self.credentials_file, scopes)
+                        
+                        # Try to run with a specific port first, fallback to no browser if needed
+                        try:
+                            self.logger.info("🔐 Starting OAuth2 authorization flow...")
+                            self.logger.info("📱 A web browser will open for Google sign-in")
+                            creds = flow.run_local_server(port=8080, open_browser=True)
+                            self.logger.info("✅ Google Drive OAuth2 authorization completed")
+                        except Exception as browser_error:
+                            self.logger.warning(f"⚠️  Browser flow failed: {browser_error}")
+                            self.logger.info("🔗 Trying console-based authentication...")
+                            creds = flow.run_console()
+                            self.logger.info("✅ Console-based OAuth2 authorization completed")
+                    except Exception as oauth_error:
+                        if "redirect_uri_mismatch" in str(oauth_error):
+                            raise Exception(
+                                "❌ OAuth2 Redirect URI Mismatch Error!\n\n"
+                                "🔧 SOLUTION: You need to add the correct redirect URI to your OAuth2 credentials.\n\n"
+                                "📋 Steps to fix:\n"
+                                "1. Go to Google Cloud Console: https://console.cloud.google.com/\n"
+                                "2. Navigate to 'APIs & Services' > 'Credentials'\n"
+                                "3. Find your OAuth 2.0 Client ID and click the edit button (pencil icon)\n"
+                                "4. In 'Authorized redirect URIs', add these URIs:\n"
+                                "   - http://localhost:8080/\n"
+                                "   - http://127.0.0.1:8080/\n"
+                                "   - urn:ietf:wg:oauth:2.0:oob\n"
+                                "5. Click 'Save'\n"
+                                "6. Wait a few minutes for the changes to propagate\n"
+                                "7. Run the script again\n\n"
+                                f"Original error: {oauth_error}"
+                            )
+                        else:
+                            raise oauth_error
+                
+                # Save the credentials for the next run
+                with open(token_file, 'wb') as token:
+                    pickle.dump(creds, token)
+                    self.logger.info("Google Drive token saved for future use")
+            
+            # Build service with OAuth2 credentials
+            self.service = build('drive', 'v3', credentials=creds, cache_discovery=False)
+            
+            self.logger.info("Google Drive service initialized successfully with OAuth2")
             
         except Exception as e:
             self.logger.error(f"Failed to setup Google Drive service: {str(e)}")
@@ -371,7 +444,21 @@ class GoogleDriveManager:
                 return None
                 
         except HttpError as e:
-            self.logger.error(f"❌ Google Drive API error: {str(e)}")
+            error_message = str(e)
+            self.logger.error(f"❌ Google Drive API error: {error_message}")
+            
+            # Special handling for storage quota error
+            if "Service Accounts do not have storage quota" in error_message:
+                self.logger.error("🚨 STORAGE QUOTA ERROR DETECTED!")
+                self.logger.error("📋 This error means you're using service account credentials,")
+                self.logger.error("   but service accounts don't have storage quota.")
+                self.logger.error("💡 SOLUTION: The application has been updated to use OAuth2.")
+                self.logger.error("   Delete 'token.pickle' if it exists and run again.")
+                self.logger.error("   You'll be prompted to sign in with your Google account.")
+            elif "storageQuotaExceeded" in error_message:
+                self.logger.error("💾 Your Google Drive storage is full!")
+                self.logger.error("💡 Please free up space in your Google Drive and try again.")
+            
             return None
         except Exception as e:
             self.logger.error(f"💥 Error uploading file {file_path}: {str(e)}")
